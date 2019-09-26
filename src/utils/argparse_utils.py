@@ -122,9 +122,9 @@ def parse_args(net_type, val=False):
 def make_model_name(args, net_type):
     model_name = '{}_'.format(args.dataset)
     if net_type == 'mfnet':
-        model_name = "{}_{}_{}_{}_cl{}".format(net_type, args.batch_size,
-                                               str(args.dropout).split('.')[0]+str(args.dropout).split('.')[1],
-                                               args.max_epochs, args.clip_length)
+        model_name += "{}_{}_{}_{}_cl{}".format(net_type, args.batch_size,
+                                                str(args.dropout).split('.')[0]+str(args.dropout).split('.')[1],
+                                                args.max_epochs, args.clip_length)
         if args.pretrained:
             model_name = model_name + "_pt"
 
