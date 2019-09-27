@@ -304,7 +304,7 @@ def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, tasks_per_da
 
             losses.update(loss.item(), batch_size)
             for ind in range(num_cls_outputs):
-                t1, t5 = accuracy(outputs[ind].detach().cpu(), targets[ind].detach().cpu(), topk=(1, 5))
+                t1, t5 = accuracy(outputs[ind].detach().cpu(), targets[ind].detach().cpu().long(), topk=(1, 5))
                 top1_meters[ind].update(t1.item(), batch_size)
                 top5_meters[ind].update(t5.item(), batch_size)
 
