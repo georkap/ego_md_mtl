@@ -97,7 +97,7 @@ def main():
 
     train = train_mfnet_mo
     test = test_mfnet_mo
-    num_cls_tasks = len([cls for cls in num_classes if cls > 0])
+    num_cls_tasks = num_objectives[0]
     new_top1, top1 = [0.0] * num_cls_tasks, [0.0] * num_cls_tasks
     for epoch in range(args.max_epochs):
         train(model_ft, optimizer, ce_loss, train_iterator, num_objectives, tasks_per_dataset, epoch, log_file,

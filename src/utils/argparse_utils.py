@@ -155,11 +155,6 @@ def make_log_file_name(output_dir, args):
     # creates the file name for the evaluation log file or None if no logging is required
     if args.logging:
         log_file = os.path.join(output_dir, "results-accuracy-validation")
-        if args.double_output:
-            if 'verb' in args.ckpt_path:
-                log_file = os.path.join(output_dir, "results-accuracy-validation-verb")
-            if 'noun' in args.ckpt_path:
-                log_file = os.path.join(output_dir, "results-accuracy-validation-noun")
         log_file += args.append_to_model_name
         log_file += ".txt"
     else:

@@ -19,7 +19,7 @@ from torch.nn import DataParallel
 from src.models.mfnet_3d_mo import MFNET_3D as MFNET_3D_MO
 from src.utils.argparse_utils import parse_args, make_log_file_name, parse_tasks_str, parse_tasks_per_dataset
 from src.utils.file_utils import print_and_save
-from src.utils.dataset_loader import VideoFromImagesDatasetLoader
+from src.utils.dataset_loader import MultitaskDatasetLoader
 from src.utils.dataset_loader_utils import Resize, RandomCrop, ToTensorVid, Normalize, CenterCrop
 from src.utils.calc_utils import eval_final_print_mt
 from src.utils.video_sampler import RandomSampling, MiddleSampling
@@ -32,7 +32,7 @@ torch.set_printoptions(linewidth=1000000, threshold=1000000)
 def main():
     args = parse_args('mfnet', val=True)
     tasks_per_dataset = parse_tasks_str(args.tasks)
-    objectives_text, num_cls_objectives, num_coo_objectives, num_classes, num_coords = parse_tasks_per_dataset(tasks_per_dataset)
+    objectives_text, num_objectives, num_classes, num_coords = parse_tasks_per_dataset(tasks_per_dataset)
     output_dir = os.path.dirname(args.ckpt_path)
     log_file = make_log_file_name(output_dir, args)
     print_and_save(args, log_file)
@@ -52,8 +52,8 @@ def main():
 
     ce_loss = torch.nn.CrossEntropyLoss().cuda()
 
-    overall_top1 = [0]*len(num_classes)
-    overall_mean_cls_acc = [0]*len(num_classes)
+    overall_top1 = [0]*num_objectives[0]
+    overall_mean_cls_acc = [0]*num_objectives[0]
     for i in range(args.mfnet_eval):
         crop_type = CenterCrop((224, 224)) if args.eval_crop == 'center' else RandomCrop((224, 224))
         if args.eval_sampler == 'middle':
@@ -66,19 +66,15 @@ def main():
         val_transforms = transforms.Compose([Resize((256, 256), False), crop_type,
                                              ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
 
-        val_loader = VideoFromImagesDatasetLoader(val_sampler, args.val_list, args.dataset, num_classes,
-                                                  use_gaze=args.use_gaze, gaze_list_prefix=args.gaze_list_prefix,
-                                                  use_hands=args.use_hands, hand_list_prefix=args.hand_list_prefix,
-                                                  batch_transform=val_transforms, extra_nouns=False, validation=True)
-        val_iter = torch.utils.data.DataLoader(val_loader,
-                                               batch_size=args.batch_size,
-                                               shuffle=False,
-                                               num_workers=args.num_workers,
-                                               pin_memory=True)
+        val_loader = MultitaskDatasetLoader(val_sampler, args.val_list, args.dataset, tasks_per_dataset,
+                                            batch_transform=val_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
+                                            hand_list_prefix=args.hand_list_prefix[:], validation=True)
+        val_iter = torch.utils.data.DataLoader(val_loader, batch_size=args.batch_size, shuffle=False,
+                                               num_workers=args.num_workers, pin_memory=True)
 
         # evaluate dataset
-        top1, outputs = validate(model_ft, ce_loss, val_iter, len(num_classes), args.use_gaze, args.use_hands,
-                                 checkpoint['epoch'], args.val_list.split("\\")[-1], log_file)
+        top1, outputs = validate(model_ft, ce_loss, val_iter, num_objectives, tasks_per_dataset,
+                                 checkpoint['epoch'], args.dataset, log_file)
 
         # calculate statistics
         for ind in range(len(num_classes)):

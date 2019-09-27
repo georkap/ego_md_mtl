@@ -133,7 +133,6 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, num_outputs, tas
         print_and_save(to_print, log_file)
     print_and_save("Epoch train time: {}".format(batch_time.sum), log_file)
 
-
 def test_mfnet_mo(model, criterion, test_iterator, num_outputs, tasks_per_dataset, cur_epoch, dataset, log_file, gpus):
     num_cls_outputs, num_g_outputs, num_h_outputs = num_outputs
     losses = AverageMeter()
@@ -172,7 +171,6 @@ def test_mfnet_mo(model, criterion, test_iterator, num_outputs, tasks_per_datase
             final_print += 'T{}::Top1 {:.3f}, Top5 {:.3f},'.format(ind, top1_meters[ind].avg, top5_meters[ind].avg)
         print_and_save(final_print, log_file)
     return [tasktop1.avg for tasktop1 in top1_meters]
-
 
 def validate_mfnet_mo_gaze(model, test_iterator, num_outputs, use_gaze, use_hands, cur_epoch, dataset, log_file):
     auc_frame, auc_temporal = AverageMeter(), AverageMeter()
@@ -272,13 +270,12 @@ def validate_mfnet_mo_json(model, test_iterator, dataset, action_file):
 
     return json_outputs
 
-
 def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, tasks_per_dataset, cur_epoch, dataset, log_file):
     num_cls_outputs, num_g_outputs, num_h_outputs = num_outputs
     losses = AverageMeter()
-    top1_meters = [AverageMeter() for _ in range(num_outputs)]
-    top5_meters = [AverageMeter() for _ in range(num_outputs)]
-    task_outputs = [[] for _ in range(num_outputs)]
+    top1_meters = [AverageMeter() for _ in range(num_cls_outputs)]
+    top5_meters = [AverageMeter() for _ in range(num_cls_outputs)]
+    task_outputs = [[] for _ in range(num_cls_outputs)]
 
     print_and_save('Evaluating after epoch: {} on {} set'.format(cur_epoch, dataset), log_file)
     with torch.no_grad():
