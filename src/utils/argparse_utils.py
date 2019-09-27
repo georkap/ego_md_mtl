@@ -19,8 +19,8 @@ def make_base_parser(val):
         parser.add_argument('--base_output_dir', type=str, default=r'outputs/')
         parser.add_argument('--model_name', type=str, default=None, help='if left to None it will be automatically created from the args')
     else:
-        parser.add_argument('ckpt_path', type=str)
-        parser.add_argument('val_list', type=str)
+        parser.add_argument('--ckpt_path', type=str)
+        parser.add_argument('--val_lists', type=str, nargs='*')
         parser.add_argument('--annotations_path', type=str, default=None)
         parser.add_argument('--epic_actions_path', type=str, default=None)
     parser.add_argument('--append_to_model_name', type=str, default='')
