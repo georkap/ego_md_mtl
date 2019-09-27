@@ -309,7 +309,7 @@ def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, tasks_per_da
                 top5_meters[ind].update(t5.item(), batch_size)
 
             to_print = '[Batch {}/{}]'.format(batch_idx, len(test_iterator))
-            for ind in range(num_outputs):
+            for ind in range(num_cls_outputs):
                 to_print += '[T{}::Top1 {:.3f}[avg:{:.3f}], Top5 {:.3f}[avg:{:.3f}]],'.format(ind, top1_meters[ind].val,
                                                                                               top1_meters[ind].avg,
                                                                                               top5_meters[ind].val,
@@ -318,7 +318,7 @@ def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, tasks_per_da
             print_and_save(to_print, log_file)
 
         to_print = '{} Results: Loss {:.3f}'.format(dataset, losses.avg)
-        for ind in range(num_outputs):
+        for ind in range(num_cls_outputs):
             to_print += ', T{}::Top1 {:.3f}, Top5 {:.3f}'.format(ind, top1_meters[ind].avg, top5_meters[ind].avg)
         print_and_save(to_print, log_file)
     return [tasktop1.avg for tasktop1 in top1_meters], task_outputs
