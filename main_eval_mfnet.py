@@ -66,7 +66,7 @@ def main():
         val_transforms = transforms.Compose([Resize((256, 256), False), crop_type,
                                              ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
 
-        val_loader = MultitaskDatasetLoader(val_sampler, args.val_list, args.dataset, tasks_per_dataset,
+        val_loader = MultitaskDatasetLoader(val_sampler, args.val_lists, args.dataset, tasks_per_dataset,
                                             batch_transform=val_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
                                             hand_list_prefix=args.hand_list_prefix[:], validation=True)
         val_iter = torch.utils.data.DataLoader(val_loader, batch_size=args.batch_size, shuffle=False,
@@ -100,6 +100,7 @@ def main():
         text_dataset_acc += ", T{}::{} ".format(ind, (overall_top1[ind] / args.mfnet_eval))
     print_and_save(text_mean_cls_acc, log_file)
     print_and_save(text_dataset_acc, log_file)
+
 
 if __name__ == '__main__':
     main()
