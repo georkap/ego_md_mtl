@@ -81,13 +81,18 @@ def main():
             video_preds = [x[0] for x in outputs[ind]]
             video_labels = [x[1] for x in outputs[ind]]
             task_type = ''
-            for td in tasks_per_dataset:
+            dataset_index = -1
+            # find the name/type of the current task's predictions, since I do not mix the tasks between the datasets
+            # i.e. a task layer produces outputs for one dataset only, I can find and use the dataset index
+            # for dataset specific evaluation
+            for dt_ind, td in enumerate(tasks_per_dataset):
                 for key, value in td.items():
                     if value == num_classes[ind]:
                         task_type = key
-            mean_cls_acc, top1_acc = eval_final_print_mt(video_preds, video_labels, args.dataset, ind,
+                        dataset_index = dt_ind
+            mean_cls_acc, top1_acc = eval_final_print_mt(video_preds, video_labels, args.dataset[dataset_index], ind,
                                                          num_classes[ind], log_file, args.annotations_path,
-                                                         args.val_list, task_type=task_type,
+                                                         args.val_lists[dataset_index], task_type=task_type,
                                                          actions_file=args.epic_actions_path)
             overall_mean_cls_acc[ind] += mean_cls_acc
             overall_top1[ind] += top1_acc

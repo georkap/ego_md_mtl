@@ -99,7 +99,7 @@ def eval_final_print_mt(video_preds, video_labels, dataset, task_id, current_cla
         if task_type == 'A':
             valid_indices = valid_action_indices
             all_indices = list(range(EPIC_CLASSES[0]))
-        if task_type == 'V': # 'Verbs': error prone if I ever train nouns on their own
+        if task_type == 'V':
             valid_indices, ids_sorted = valid_verb_indices, verb_ids_sorted
             all_indices = list(range(EPIC_CLASSES[1]))
         elif task_type == 'N':
