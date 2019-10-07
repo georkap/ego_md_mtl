@@ -70,6 +70,7 @@ def parse_args_training(parser):
                             +"'multistep' then lr_steps is a list of size n+1 for n number of learning rate decreases and the gamma to reduce by at lr_steps[-1]."\
                             +"'clr' then lr_steps is a list of size 6: [base_lr, max_lr, num_epochs_up, num_epochs_down, mode, gamma]. In the clr case, argument 'lr' is ignored."\
                             +"'groupmultistep' then the arguments are used like 'multistep' but internally different learning rate is applied to different parameter groups.")
+    parser.add_argument('--moo', default=False, action='store_true')
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--decay', type=float, default=0.0005)  # decay for mfnet is 0.0001
     parser.add_argument('--max_epochs', type=int, default=20)
@@ -135,16 +136,12 @@ def make_model_name(args, net_type):
         clr_type = "tri" if args.lr_steps[4] == "triangular" else "tri2" if args.lr_steps[4] == "triangular2" else "exp"
         model_name = model_name + "_{}".format(clr_type)
         model_name = model_name + str(args.lr_steps[0]).split('.')[0] + str(args.lr_steps[0]).split('.')[1] + '-' + str(args.lr_steps[1]).split('.')[0] + str(args.lr_steps[1]).split('.')[1]
-    # model_name = model_name + "_asel{}".format(args.action_classes)
-    # model_name = model_name + "_vsel{}".format(args.verb_classes)
-    # model_name = model_name + "_nsel{}".format(args.noun_classes)
-    # if args.use_hands:
-    #     model_name = model_name + "_hands"
-    # if args.use_gaze:
-    #     model_name = model_name + "_gaze"
+
     model_name += "_{}".format(args.tasks)
     if args.mixup_a != 1.:
-        model_name = model_name + "_mixup" 
+        model_name = model_name + "_mixup"
+    if args.moo:
+        model_name = model_name + "_moo"
 
     model_name = model_name + args.append_to_model_name
     

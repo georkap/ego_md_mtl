@@ -170,7 +170,38 @@ class MFNET_3D(nn.Module):
         # Initialization
         xavier(net=self)
 
-    def forward(self, x):
+    def forward(self, x, upto=None):
+        if upto is None:
+            assert x.shape[2] == 16
+
+            h = self.conv1(x)   # x224 -> x112
+            h = self.maxpool(h)  # x112 ->  x56
+
+            h = self.conv2(h)  # x56 ->  x56
+            h = self.conv3(h)  # x56 ->  x28
+            h = self.conv4(h)  # x28 ->  x14
+            h = self.conv5(h)  # x14 ->   x7
+
+            h = self.tail(h)
+            coords, heatmaps = None, None
+            if self.num_coords > 0:
+                coords, heatmaps = self.coord_layers(h)
+
+            h = self.globalpool(h)
+
+            h = h.view(h.shape[0], -1)
+
+            h_out = self.classifier_list(h)
+
+            return h_out, coords, heatmaps
+        elif upto == 'shared':
+            return self.forward_shared_block(x)
+        elif upto == 'cls':
+            return self.forward_cls_layers(x)
+        elif upto == 'coord':
+            return self.forward_coord_layers(x)
+    
+    def forward_shared_block(self, x):
         assert x.shape[2] == 16
 
         h = self.conv1(x)   # x224 -> x112
@@ -181,18 +212,23 @@ class MFNET_3D(nn.Module):
         h = self.conv4(h)  # x28 ->  x14
         h = self.conv5(h)  # x14 ->   x7
 
-        h = self.tail(h)
-        coords, heatmaps = None, None
-        if self.num_coords > 0:
-            coords, heatmaps = self.coord_layers(h)
+        h_tail = self.tail(h)
 
-        h = self.globalpool(h)
+        h = self.globalpool(h_tail)
 
         h = h.view(h.shape[0], -1)
 
-        h_out = self.classifier_list(h)
+        return h, h_tail
 
-        return h_out, coords, heatmaps
+    def forward_coord_layers(self, h_tail):
+        coords, heatmaps = None, None
+        if self.num_coords > 0:
+            coords, heatmaps = self.coord_layers(h_tail)
+        return coords, heatmaps
+
+    def forward_cls_layers(self, h):
+        h_out = self.classifier_list(h)
+        return h_out
 
 
 if __name__ == "__main__":
@@ -200,7 +236,10 @@ if __name__ == "__main__":
     # ---------
     kwargs = {'num_coords': 3}
     net = MFNET_3D(num_classes=[2, 3], pretrained=False, **kwargs)
-    data = torch.randn(1, 3, 16, 224, 224)
+    data = torch.randn(1, 3, 16, 224, 224, requires_grad=True)
     output = net(data)
+    h, htail = net.forward_shared_block(data)
+    coords, heatmaps = net.forward_coord_layers(htail)
+    output = net.forward_cls_layers(h)
 #    torch.save({'state_dict': net.state_dict()}, './tmp.pth')
     print(len(output))

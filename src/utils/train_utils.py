@@ -17,7 +17,7 @@ import torch
 from torch.optim.lr_scheduler import StepLR, MultiStepLR
 from src.utils.calc_utils import AverageMeter, accuracy
 from src.utils.learning_rates import CyclicLR, GroupMultistep
-from src.losses.mtl_losses import get_mtl_losses
+from src.losses.mtl_losses import get_mtl_losses, multiobjective_gradient_optimization
 from src.utils.eval_utils import *
 
 
@@ -66,7 +66,7 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
 
 
 def train_mfnet_mo(model, optimizer, criterion, train_iterator, num_outputs, tasks_per_dataset, cur_epoch, log_file,
-                   gpus, lr_scheduler=None):
+                   gpus, lr_scheduler=None, moo=False):
     num_cls_outputs, num_g_outputs, num_h_outputs = num_outputs
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -89,13 +89,18 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, num_outputs, tas
             lr_scheduler.step()
 
         inputs = inputs.cuda(gpus[0])
-        outputs, coords, heatmaps = model(inputs)
         # needs transpose to get the first dim to be the task and the second dim to be the batch
         targets = targets.cuda(gpus[0]).transpose(0, 1)
 
-        loss, cls_losses, gaze_coord_losses, hand_coord_losses = get_mtl_losses(targets, outputs, coords, heatmaps,
-                                                                                num_outputs, tasks_per_dataset,
-                                                                                criterion)
+        if moo:
+            loss, cls_losses, gaze_coord_losses, hand_coord_losses, outputs = \
+                multiobjective_gradient_optimization(model, optimizer, inputs, targets, num_outputs, tasks_per_dataset,
+                                                     criterion)
+        else:
+            outputs, coords, heatmaps = model(inputs)
+            loss, cls_losses, gaze_coord_losses, hand_coord_losses = get_mtl_losses(targets, outputs, coords, heatmaps,
+                                                                                    num_outputs, tasks_per_dataset,
+                                                                                    criterion)
 
         optimizer.zero_grad()
         loss.backward()
@@ -144,9 +149,9 @@ def test_mfnet_mo(model, criterion, test_iterator, num_outputs, tasks_per_datase
         print_and_save('Evaluating after epoch: {} on {} set'.format(cur_epoch, dataset), log_file)
         for batch_idx, (inputs, targets) in enumerate(test_iterator):
             inputs = inputs.cuda(gpus[0])
-            outputs, coords, heatmaps = model(inputs)
             targets = targets.cuda(gpus[0]).transpose(0, 1)
 
+            outputs, coords, heatmaps = model(inputs)
             loss, cls_losses, gaze_coord_losses, hand_coord_losses = get_mtl_losses(targets, outputs, coords, heatmaps,
                                                                                     num_outputs, tasks_per_dataset,
                                                                                     criterion)
