@@ -3,6 +3,19 @@
 Created on Tue Sep 23 2019
 
 main eval mfnet multitask
+Notes for evaluation on multidataset models.
+Evaluation is not to be done on multiple datasets together as it will most probably complicate everything when calculating metrics.
+Instead I intend to run the evaluation script for one dataset only.
+
+The smartest thing to do would be to choose which weights to load into the model depending on the dataset I have.
+args.tasks has all the model tasks, as it was originally trained.
+Adding args.eval_tasks for the tasks to be evaluated. I will compare eval tasks with tasks and load only the appropriate output layers.
+Dataloader loads only the dataset to be evaluated with the tasks assigned from args.eval_tasks as if loading a single-dataset model.
+
+When designing the model structure and loading the weights it chooses only the appropriate output layers for the tasks
+of the dataset under evaluation.
+
+So I will create a single-dataset model from a multi-dataset one.
 
 @author: Georgios Kapidis
 """
@@ -17,7 +30,7 @@ from torch.utils.data import DataLoader
 from torch.nn import DataParallel
 
 from src.models.mfnet_3d_mo import MFNET_3D as MFNET_3D_MO
-from src.utils.argparse_utils import parse_args, make_log_file_name, parse_tasks_str, parse_tasks_per_dataset
+from src.utils.argparse_utils import parse_args, make_log_file_name, parse_tasks_str, parse_tasks_per_dataset, compare_tasks_per_dataset
 from src.utils.file_utils import print_and_save
 from src.utils.dataset_loader import MultitaskDatasetLoader
 from src.utils.dataset_loader_utils import Resize, RandomCrop, ToTensorVid, Normalize, CenterCrop
@@ -31,8 +44,18 @@ torch.set_printoptions(linewidth=1000000, threshold=1000000)
 
 def main():
     args = parse_args('mfnet', val=True)
-    tasks_per_dataset = parse_tasks_str(args.tasks)
+    tasks_per_dataset = parse_tasks_str(args.tasks, args.dataset)
+    if args.eval_tasks is not None: # trained multi-dataset eval single-dataset
+        eval_tasks_per_dataset = parse_tasks_str(args.eval_tasks, [args.eval_dataset])
+        starting_cls_id, starting_g_id, starting_h_id = compare_tasks_per_dataset(tasks_per_dataset,
+                                                                                  eval_tasks_per_dataset)
+        train_tasks_per_dataset = tasks_per_dataset
+        tasks_per_dataset = eval_tasks_per_dataset
+        args.dataset = [args.eval_dataset]
+
+
     objectives_text, num_objectives, num_classes, num_coords = parse_tasks_per_dataset(tasks_per_dataset)
+
     output_dir = os.path.dirname(args.ckpt_path)
     log_file = make_log_file_name(output_dir, args)
     print_and_save(args, log_file)
@@ -47,7 +70,17 @@ def main():
     model_ft = mfnet_3d(num_classes, **kwargs)
     model_ft = torch.nn.DataParallel(model_ft).cuda()
     checkpoint = torch.load(args.ckpt_path, map_location={'cuda:1': 'cuda:0'})
-    model_ft.load_state_dict(checkpoint['state_dict'])
+    if args.eval_tasks is not None:
+        cls_task_base_name = 'module.classifier_list.classifier_list.{}.{}'
+        for i in range(len(num_classes)):
+            for layer in ['weight', 'bias']:
+                checkpoint['state_dict'][cls_task_base_name.format(i, layer)] = \
+                    checkpoint['state_dict'][cls_task_base_name.format(i + starting_cls_id, layer)]
+        starting_coord_id = starting_g_id + 2 * starting_h_id
+        checkpoint['state_dict']['module.coord_layers.hm_conv.weight'] = \
+            checkpoint['state_dict']['module.coord_layers.hm_conv.weight'][starting_coord_id:starting_coord_id+num_coords]
+
+    model_ft.load_state_dict(checkpoint['state_dict'], strict=(args.eval_tasks is None))
     print_and_save("Model loaded on gpu {} devices".format(args.gpus), log_file)
 
     ce_loss = torch.nn.CrossEntropyLoss().cuda()
@@ -81,7 +114,7 @@ def main():
             video_preds = [x[0] for x in outputs[ind]]
             video_labels = [x[1] for x in outputs[ind]]
             task_type = ''
-            dataset_index = -1
+            # dataset_index = -1
             # find the name/type of the current task's predictions, since I do not mix the tasks between the datasets
             # i.e. a task layer produces outputs for one dataset only, I can find and use the dataset index
             # for dataset specific evaluation
@@ -89,10 +122,10 @@ def main():
                 for key, value in td.items():
                     if value == num_classes[ind]:
                         task_type = key
-                        dataset_index = dt_ind
-            mean_cls_acc, top1_acc = eval_final_print_mt(video_preds, video_labels, args.dataset[dataset_index], ind,
+                        # dataset_index = dt_ind
+            mean_cls_acc, top1_acc = eval_final_print_mt(video_preds, video_labels, args.dataset[0], ind,
                                                          num_classes[ind], log_file, args.annotations_path,
-                                                         args.val_lists[dataset_index], task_type=task_type,
+                                                         args.val_lists[0], task_type=task_type,
                                                          actions_file=args.epic_actions_path)
             overall_mean_cls_acc[ind] += mean_cls_acc
             overall_top1[ind] += top1_acc

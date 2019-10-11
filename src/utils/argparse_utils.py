@@ -87,6 +87,8 @@ def parse_args_eval(parser):
     parser.add_argument('--mfnet_eval', type=int, default=1)
     parser.add_argument('--eval_sampler', type=str, default='random', choices=['middle', 'random', 'doublefull'])
     parser.add_argument('--eval_crop', type=str, default='random', choices=['center', 'random'])
+    parser.add_argument('--eval_tasks', type=str, default=None)
+    parser.add_argument('--eval_dataset', type=str, default=None)
 
     return parser
 
@@ -158,7 +160,7 @@ def make_log_file_name(output_dir, args):
         log_file = None
     return log_file
 
-def parse_tasks_str(task_str):
+def parse_tasks_str(task_str, dataset_names):
     """ Parser for task string. '+' will split the string and will parse each part for a dataset. It will return a list
      with dictionaries. The length of the list is equal to the number of datasets in the multidataset training scheme.
      Each list entry is a dictionary where the key is the task starting letter and the value is an Int or None. Int
@@ -166,7 +168,7 @@ def parse_tasks_str(task_str):
       task which depending on the letter will mean a specific thing."""
     task_str = task_str.split('+')
     tasks_per_dataset = []
-    for dataset_tasks in task_str:
+    for dataset_tasks, dataset_name in zip(task_str, dataset_names):
         num_classes = {}
         if not re.match(r'[A-Z]', dataset_tasks):
             sys.exit("Badly written task pattern, read the docs. Exit status -1.")
@@ -195,6 +197,7 @@ def parse_tasks_str(task_str):
         num_classes['num_g_tasks'] = num_g_tasks
         num_classes['num_h_tasks'] = num_h_tasks
         num_classes['max_target_size'] = max_target_size
+        num_classes['dataset'] = dataset_name
         tasks_per_dataset.append(num_classes)
     return tasks_per_dataset
 
@@ -233,3 +236,22 @@ def parse_tasks_per_dataset(tasks_per_dataset):
                 pass
             # and an if clause for every new type of task
     return objectives_text, (num_cls_objectives, num_g_objectives, num_h_objectives), num_classes, num_coords
+
+def compare_tasks_per_dataset(train_td, eval_td):
+    eval_dataset = eval_td[0]['dataset']
+
+    starting_cls_id = 0
+    starting_g_id = 0
+    starting_h_id = 0
+    dataset_id = -1
+    for i, td in enumerate(train_td):
+        if td['dataset'] == eval_dataset:
+            dataset_id = i
+        else:
+            starting_cls_id += td['num_cls_tasks']
+            starting_g_id += td['num_g_tasks']
+            starting_h_id += td['num_h_tasks']
+    if dataset_id == -1:
+        raise Exception("Can't find eval dataset in trained model.")
+
+    return starting_cls_id, starting_g_id, starting_h_id

@@ -27,7 +27,7 @@ from src.constants import *
 
 def main():
     args, model_name = parse_args('mfnet', val=False)
-    tasks_per_dataset = parse_tasks_str(args.tasks)
+    tasks_per_dataset = parse_tasks_str(args.tasks, args.dataset)
     objectives_text, num_objectives, num_classes, num_coords = parse_tasks_per_dataset(tasks_per_dataset)
     output_dir, log_file = init_folders(args.base_output_dir, model_name, args.resume, args.logging)
     print_and_save(args, log_file)

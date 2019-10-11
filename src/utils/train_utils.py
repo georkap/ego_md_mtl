@@ -138,17 +138,18 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
             # loss.backward()
 
             # update metrics
-            dataset_metrics[dataset_id]['losses'].update(loss.item(), batch_size)
+            dataset_batch_size = len(batch_ids_per_dataset[dataset_id])
+            dataset_metrics[dataset_id]['losses'].update(loss.item(), dataset_batch_size)
             for ind in range(num_cls_tasks):
                 t1, t5 = accuracy(outputs_per_dataset[dataset_id][ind].detach().cpu(),
                                   targets_per_dataset[dataset_id][ind].detach().cpu().long(), topk=(1, 5))
-                dataset_metrics[dataset_id]['top1_meters'][ind].update(t1.item(), batch_size)
-                dataset_metrics[dataset_id]['top5_meters'][ind].update(t5.item(), batch_size)
-                dataset_metrics[dataset_id]['cls_loss_meters'][ind].update(cls_losses[ind].item(), batch_size)
+                dataset_metrics[dataset_id]['top1_meters'][ind].update(t1.item(), dataset_batch_size)
+                dataset_metrics[dataset_id]['top5_meters'][ind].update(t5.item(), dataset_batch_size)
+                dataset_metrics[dataset_id]['cls_loss_meters'][ind].update(cls_losses[ind].item(), dataset_batch_size)
             for i, gl in enumerate(gaze_coord_losses):
-                dataset_metrics[dataset_id]['losses_gaze'][i].update(gl.item(), batch_size)
+                dataset_metrics[dataset_id]['losses_gaze'][i].update(gl.item(), dataset_batch_size)
             for i, hl in enumerate(hand_coord_losses):
-                dataset_metrics[dataset_id]['losses_hands'][i].update(hl.item(), batch_size)
+                dataset_metrics[dataset_id]['losses_hands'][i].update(hl.item(), dataset_batch_size)
 
         # compute gradients and backward
         full_loss = sum(full_loss)
@@ -250,35 +251,36 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
                 global_coord_id += num_coord_tasks
 
                 # update metrics
-                dataset_metrics[dataset_id]['losses'].update(loss.item(), batch_size)
+                dataset_batch_size = len(batch_ids_per_dataset[dataset_id])
+                dataset_metrics[dataset_id]['losses'].update(loss.item(), dataset_batch_size)
                 for ind in range(num_cls_tasks):
                     t1, t5 = accuracy(outputs_per_dataset[dataset_id][ind].detach().cpu(),
                                       targets_per_dataset[dataset_id][ind].detach().cpu().long(), topk=(1, 5))
-                    dataset_metrics[dataset_id]['top1_meters'][ind].update(t1.item(), batch_size)
-                    dataset_metrics[dataset_id]['top5_meters'][ind].update(t5.item(), batch_size)
+                    dataset_metrics[dataset_id]['top1_meters'][ind].update(t1.item(), dataset_batch_size)
+                    dataset_metrics[dataset_id]['top5_meters'][ind].update(t5.item(), dataset_batch_size)
 
             # print results
-            to_print = '[Epoch:{}, Batch {}/{}] '.format(cur_epoch, batch_idx, len(test_iterator))
+            to_print = '[Epoch:{}, Batch {}/{}]'.format(cur_epoch, batch_idx, len(test_iterator))
             for dataset_id in range(num_datasets):
+                to_print += '\n\t'
                 num_cls_tasks = tasks_per_dataset[dataset_id]['num_cls_tasks']
                 top1_meters = dataset_metrics[dataset_id]['top1_meters']
                 top5_meters = dataset_metrics[dataset_id]['top5_meters']
                 for ind in range(num_cls_tasks):
-                    to_print += '\n\tT{}::Top1 {:.3f}[avg:{:.3f}], Top5 {:.3f}[avg:{:.3f}],'.format(
+                    to_print += ' T{}::Top1 {:.3f}[avg:{:.3f}], Top5 {:.3f}[avg:{:.3f}],'.format(
                         ind, top1_meters[ind].val, top1_meters[ind].avg, top5_meters[ind].val, top5_meters[ind].avg)
 
             print_and_save(to_print, log_file)
 
-        final_print = ""
         for dataset_id in range(num_datasets):
             num_cls_tasks = tasks_per_dataset[dataset_id]['num_cls_tasks']
             losses = dataset_metrics[dataset_id]['losses']
             top1_meters = dataset_metrics[dataset_id]['top1_meters']
             top5_meters = dataset_metrics[dataset_id]['top5_meters']
-            final_print += '{} Results: Loss {:.3f},'.format(dataset, losses.avg)
+            final_print = '{} Results: Loss {:.3f},'.format(dataset, losses.avg)
             for ind in range(num_cls_tasks):
-                final_print += 'T{}::Top1 {:.3f}, Top5 {:.3f},\n'.format(ind, top1_meters[ind].avg, top5_meters[ind].avg)
-        print_and_save(final_print, log_file)
+                final_print += 'T{}::Top1 {:.3f}, Top5 {:.3f}, '.format(ind, top1_meters[ind].avg, top5_meters[ind].avg)
+            print_and_save(final_print, log_file)
 
         task_top1s = list()
         for dataset_id in range(num_datasets):
