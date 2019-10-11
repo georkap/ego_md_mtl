@@ -4,21 +4,73 @@ from src.losses.coord_loss import gaze_loss, hand_loss
 from src.losses.min_norm_solvers import MinNormSolver, gradient_normalizers
 
 
-def get_mtl_losses(targets, outputs, coords, heatmaps, num_outputs, tasks_per_dataset, criterion):
+def get_mtl_losses(targets, outputs, coords, heatmaps, num_outputs, criterion):
     num_cls_outputs, num_g_outputs, num_h_outputs = num_outputs
     targets_starting_point = num_cls_outputs
+    slice_from = 0
+    cls_targets = targets[:num_cls_outputs, :].long()
+    cls_losses = []
+    assert len(cls_targets) == num_cls_outputs
+    for output, target in zip(outputs, cls_targets):
+        loss_for_task = criterion(output, target)
+        cls_losses.append(loss_for_task)
+    loss = sum(cls_losses)
+    # finished with classification losses for any dataset
+
+    gaze_coord_losses, hand_coord_losses = [], []
+    if num_g_outputs > 0:
+        gaze_coord_loss = gaze_loss(targets, start_from=targets_starting_point, coords=coords, heatmaps=heatmaps,
+                                    slice_ind=slice_from)
+        targets_starting_point += 16
+        slice_from += 1
+        loss = loss + gaze_coord_loss
+        gaze_coord_losses.append(gaze_coord_loss)
+    if num_h_outputs > 0:
+        hand_coord_loss = hand_loss(targets, start_from=targets_starting_point, coords=coords, heatmaps=heatmaps,
+                                    slice_from=slice_from)
+        targets_starting_point += 32
+        slice_from += 2
+        loss = loss + hand_coord_loss
+        hand_coord_losses.append(hand_coord_loss)
+    return loss, cls_losses, gaze_coord_losses, hand_coord_losses
+
+def _get_mtl_losses(targets, dataset_ids, outputs, coords, heatmaps, num_outputs, tasks_per_dataset, criterion):
+    num_cls_outputs, num_g_outputs, num_h_outputs = num_outputs
+    targets_starting_point = num_cls_outputs
+    num_datasets = len(tasks_per_dataset)
     slice_from = 0
 
     # the structure here will depend on how the labels are given from the dataset loader
     # (which is not yet done for multidataset).
     # The design will be: all classification labels first, and then it will be GH per dataset
     cls_targets = targets[:num_cls_outputs, :].long()
-    assert len(cls_targets) == num_cls_outputs
-
     cls_losses = []
-    for output, target in zip(outputs, cls_targets):
-        loss_for_task = criterion(output, target)
-        cls_losses.append(loss_for_task)
+    if num_datasets == 1:
+        assert len(cls_targets) == num_cls_outputs
+        for output, target in zip(outputs, cls_targets):
+            loss_for_task = criterion(output, target)
+            cls_losses.append(loss_for_task)
+    else:
+        # find which part of the batch belongs in which dataset
+        batch_ids_per_dataset = []
+        for dat in range(num_datasets):
+            batch_ids = []
+            batch_ids_per_dataset.append(batch_ids)
+        for batch_ind, dataset_id in enumerate(dataset_ids):
+            batch_ids_per_dataset[dataset_id].append(batch_ind)
+
+        global_task_id = 0
+        for dataset_id in range(num_datasets):
+            # for task_id, output in enumerate(outputs):
+            num_cls_tasks = tasks_per_dataset[dataset_id]['num_cls_tasks']
+            for task_id in range(num_cls_tasks):
+                t_output = outputs[global_task_id+task_id][batch_ids_per_dataset[dataset_id]]
+                t_target = cls_targets[:, batch_ids_per_dataset[dataset_id]][task_id]
+                if len(t_output) > 0:
+                    loss_for_task = criterion(t_output, t_target)
+                    cls_losses.append(loss_for_task)
+            global_task_id += num_cls_tasks
+
     loss = sum(cls_losses)
     # finished with classification losses for any dataset
 
@@ -92,6 +144,7 @@ def multiobjective_gradient_optimization(model, optimizer, inputs, targets, num_
         optimizer.zero_grad()
         coord_loss = hand_loss(targets, start_from=targets_starting_point, coords=coords, heatmaps=heatmaps,
                                slice_from=slice_from)
+        losses['H'] = coord_loss.data.item()
         coord_loss.backward()
         grads_h = torch.tensor(sh_block_tail_variable.grad.clone(), requires_grad=False)
         grads['H'] = [F.avg_pool3d(grads_h, kernel_size=(8, 7, 7), stride=(1, 1, 1)).squeeze_()]

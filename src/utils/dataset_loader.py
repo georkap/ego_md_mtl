@@ -154,8 +154,9 @@ def parse_samples_list(list_file, datatype):
     return [datatype(x.strip().split(' ')) for x in open(list_file)]
 
 class DatasetInfo(object):
-    def __init__(self, dataset_name, data_line, img_tmpl, norm_val, tasks_for_dataset, cls_tasks, max_num_classes,
+    def __init__(self, dataset_id, dataset_name, data_line, img_tmpl, norm_val, tasks_for_dataset, cls_tasks, max_num_classes,
                  gaze_list_prefix, hand_list_prefix, video_list):
+        self.dataset_id = dataset_id
         self.dataset_name = dataset_name
         self.data_line = data_line
         self.img_tmpl = img_tmpl
@@ -210,7 +211,8 @@ class MultitaskDatasetLoader(torchDataset):
         assert len(datasets) == len(tasks_per_dataset) # 1-1 association between dataset name, split file and resp tasks
         self.video_list = list()
         self.dataset_infos = dict()
-        for dataset_name, split_file, td in zip(datasets, split_files, tasks_per_dataset):
+        self.maximum_target_size = 0
+        for i, (dataset_name, split_file, td) in enumerate(zip(datasets, split_files, tasks_per_dataset)):
             glp = gaze_list_prefix.pop(0) if 'G' in td else None
             hlp = hand_list_prefix.pop(0) if 'H' in td else None
             if dataset_name == 'epick':
@@ -230,8 +232,9 @@ class MultitaskDatasetLoader(torchDataset):
             else:
                 # undeveloped dataset yet e.g. something something or whatever
                 pass
-            dat_info = DatasetInfo(dataset_name, data_line, img_tmpl, norm_val, td, cls_tasks, max_num_classes, glp,
+            dat_info = DatasetInfo(i, dataset_name, data_line, img_tmpl, norm_val, td, cls_tasks, max_num_classes, glp,
                                    hlp, video_list)
+            self.maximum_target_size = td['max_target_size'] if td['max_target_size'] > self.maximum_target_size else self.maximum_target_size
             self.dataset_infos[dataset_name] = dat_info
             self.video_list += video_list
 
@@ -300,6 +303,7 @@ class MultitaskDatasetLoader(torchDataset):
             # unknown type
             sys.exit("Wrong data_line in dataloader.__getitem__. Exit code -2")
 
+        dataset_id = self.dataset_infos[dataset_name].dataset_id
         norm_val = self.dataset_infos[dataset_name].norm_val
         img_tmpl = self.dataset_infos[dataset_name].img_tmpl
         sampled_idxs = self.sampler.sampling(range_max=frame_count, v_id=index, start_frame=start_frame)
@@ -406,23 +410,26 @@ class MultitaskDatasetLoader(torchDataset):
             gaze_points = gaze_track.astype(np.float32).flatten()
             labels = np.concatenate((labels, gaze_points))
         if use_hands:
-            hand_points = np.concatenate((left_track[:, np.newaxis, :], right_track[:, np.newaxis, :]), axis=1).astype(np.float32)
+            hand_points = np.concatenate((left_track[:, np.newaxis, :], right_track[:, np.newaxis, :]), axis=1).astype(
+                np.float32)
             hand_points = hand_points.flatten()
             labels = np.concatenate((labels, hand_points))
 
+        if len(labels) < self.maximum_target_size:
+            labels = np.concatenate((labels, [0.0]*(self.maximum_target_size-len(labels)))).astype(np.float32)
         if self.validation:
-            return clip_input, labels, validation_id
+            return clip_input, labels, dataset_id, validation_id
         elif self.eval_gaze and use_gaze:
             orig_gaze = np.array([[value[0], value[1]] for key, value in gaze_data.items()], dtype=np.float32).flatten()
-            return clip_input, labels, orig_gaze, validation_id
+            return clip_input, labels, dataset_id, orig_gaze, validation_id
         else:
-            return clip_input, labels
+            return clip_input, labels, dataset_id
 
 
 if __name__ == '__main__':
     # video_list_file = r"D:\Code\hand_track_classification\splits\epic_rgb_select2_56_nd\epic_rgb_train_1.txt"
     # video_list_file = r"D:\Code\hand_track_classification\splits\epic_rgb_brd\epic_rgb_train_1.txt"
-    #video_list_file = r"D:\Code\hand_track_classification\splits\epic_rgb_select2_56_nd_brd\epic_rgb_train_1.txt"
+    # video_list_file = r"D:\Code\hand_track_classification\splits\epic_rgb_select2_56_nd_brd\epic_rgb_train_1.txt"
     # video_list_file = r"D:\Code\hand_track_classification\vis_utils\21247.txt"
 
     # video_list_file = r"D:\Code\hand_track_classification\splits\gtea_rgb\fake_split2.txt"
@@ -441,8 +448,8 @@ if __name__ == '__main__':
         RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288], seed=seed),
         RandomCrop((224, 224), seed=seed), RandomHorizontalFlip(seed=seed), RandomHLS(vars=[15, 35, 25]),
         ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
-    test_transforms = transforms.Compose([Resize((256, 256), False), CenterCrop((224, 224)),
-         ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
+    test_transforms = transforms.Compose([Resize((256, 256), False), CenterCrop((224, 224)), ToTensorVid(),
+                                          Normalize(mean=mean_3d, std=std_3d)])
 
     # test_sampler = MiddleSampling(num=16)
     # test_sampler = FullSampling()
@@ -488,5 +495,5 @@ if __name__ == '__main__':
                                     validation=True, eval_gaze=False, vis_data=True)
 
     for ind in range(len(loader)):
-        _clip_input, _labels, _validation_id = loader.__getitem__(ind)
+        _clip_input, _labels, _dataset_id, _validation_id = loader.__getitem__(ind)
         print("\rItem {}: {}: {}".format(ind, _validation_id, _labels))

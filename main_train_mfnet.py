@@ -20,7 +20,8 @@ from src.utils.file_utils import print_and_save, save_mt_checkpoints, init_folde
 from src.utils.dataset_loader import MultitaskDatasetLoader, prepare_sampler
 from src.utils.dataset_loader_utils import RandomScale, RandomCrop, RandomHorizontalFlip, RandomHLS, ToTensorVid,\
     Normalize, Resize, CenterCrop
-from src.utils.train_utils import load_lr_scheduler, train_mfnet_mo, test_mfnet_mo
+from src.utils.train_utils import train_mfnet_mo, test_mfnet_mo
+from src.utils.lr_utils import load_lr_scheduler
 from src.constants import *
 
 
@@ -100,14 +101,12 @@ def main():
     num_cls_tasks = num_objectives[0]
     new_top1, top1 = [0.0] * num_cls_tasks, [0.0] * num_cls_tasks
     for epoch in range(args.max_epochs):
-        train(model_ft, optimizer, ce_loss, train_iterator, num_objectives, tasks_per_dataset, epoch, log_file,
-              args.gpus, lr_scheduler, moo=args.moo)
+        train(model_ft, optimizer, ce_loss, train_iterator, tasks_per_dataset, epoch, log_file, args.gpus, lr_scheduler,
+              moo=args.moo)
         if (epoch+1) % args.eval_freq == 0:
             if args.eval_on_train:
-                test(model_ft, ce_loss, train_iterator, num_objectives, tasks_per_dataset, epoch, "Train", log_file,
-                     args.gpus)
-            new_top1 = test(model_ft, ce_loss, test_iterator, num_objectives, tasks_per_dataset, epoch, "Test",
-                            log_file, args.gpus)
+                test(model_ft, ce_loss, train_iterator, tasks_per_dataset, epoch, "Train", log_file, args.gpus)
+            new_top1 = test(model_ft, ce_loss, test_iterator, tasks_per_dataset, epoch, "Test", log_file, args.gpus)
             top1 = save_mt_checkpoints(model_ft, optimizer, top1, new_top1, args.save_all_weights, output_dir,
                                        model_name, epoch, log_file)
 

@@ -173,12 +173,28 @@ def parse_tasks_str(task_str):
 
         # get the task starting letters
         tasks = re.findall(r'[A-Z]', dataset_tasks)
-        # num_objectives = len(tasks)
         # get per class numbers (if there are any) but skip the first one because the patter always starts with a letter
         classes = re.split(r'[A-Z]', dataset_tasks)[1:]
         assert len(tasks) == len(classes)
+        num_cls_tasks = 0
+        num_g_tasks = 0
+        num_h_tasks = 0
+        max_target_size = 0
         for t, cls in zip(tasks, classes):
             num_classes[t] = int(cls) if cls is not '' else None
+            if t not in ['G', 'H']: # expand with other non classification tasks as necessary
+                num_cls_tasks += 1
+                max_target_size += 1
+            if t == 'G':
+                num_g_tasks += 1
+                max_target_size += 16
+            if t == 'H':
+                num_h_tasks += 1
+                max_target_size += 32
+        num_classes['num_cls_tasks'] = num_cls_tasks
+        num_classes['num_g_tasks'] = num_g_tasks
+        num_classes['num_h_tasks'] = num_h_tasks
+        num_classes['max_target_size'] = max_target_size
         tasks_per_dataset.append(num_classes)
     return tasks_per_dataset
 
