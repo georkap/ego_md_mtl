@@ -174,13 +174,15 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
             top1_meters = dataset_metrics[dataset_id]['top1_meters']
             top5_meters = dataset_metrics[dataset_id]['top5_meters']
             to_print += '[Losses {:.4f}[avg:{:.4f}], '.format(losses.val, losses.avg)
-            for ind in range(num_g_tasks):
-                to_print += '[l_gcoo_{} {:.4f}[avg:{:.4f}], '.format(ind, losses_gaze[ind].val, losses_gaze[ind].avg)
-            for ind in range(num_h_tasks):
-                to_print += '[l_hcoo_{} {:.4f}[avg:{:.4f}], '.format(ind, losses_hands[ind].val, losses_hands[ind].avg)
             for ind in range(num_cls_tasks):
                 to_print += 'T{}::loss {:.4f}[avg:{:.4f}], '.format(ind, cls_loss_meters[ind].val, cls_loss_meters[ind].avg)
+            for ind in range(num_h_tasks):
+                to_print += '[l_hcoo_{} {:.4f}[avg:{:.4f}], '.format(ind, losses_hands[ind].val, losses_hands[ind].avg)
+            for ind in range(num_g_tasks):
+                to_print += '[l_gcoo_{} {:.4f}[avg:{:.4f}], '.format(ind, losses_gaze[ind].val, losses_gaze[ind].avg)
             for ind in range(num_cls_tasks):
+                if ind == 0:
+                    to_print += '\n\t\t'
                 to_print += 'T{}::Top1 {:.3f}[avg:{:.3f}],Top5 {:.3f}[avg:{:.3f}],'.format(
                     ind, top1_meters[ind].val, top1_meters[ind].avg, top5_meters[ind].val, top5_meters[ind].avg)
             if dataset_id+1 < num_datasets:
@@ -267,21 +269,22 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
 
             print_and_save(to_print, log_file)
 
+        final_print = ""
         for dataset_id in range(num_datasets):
             num_cls_tasks = tasks_per_dataset[dataset_id]['num_cls_tasks']
             losses = dataset_metrics[dataset_id]['losses']
             top1_meters = dataset_metrics[dataset_id]['top1_meters']
             top5_meters = dataset_metrics[dataset_id]['top5_meters']
-            final_print = '{} Results: Loss {:.3f},'.format(dataset, losses.avg)
+            final_print += '{} Results: Loss {:.3f},'.format(dataset, losses.avg)
             for ind in range(num_cls_tasks):
-                final_print += 'T{}::Top1 {:.3f}, Top5 {:.3f},'.format(ind, top1_meters[ind].avg, top5_meters[ind].avg)
+                final_print += 'T{}::Top1 {:.3f}, Top5 {:.3f},\n'.format(ind, top1_meters[ind].avg, top5_meters[ind].avg)
         print_and_save(final_print, log_file)
 
         task_top1s = list()
         for dataset_id in range(num_datasets):
             top1_meters = dataset_metrics[dataset_id]['top1_meters']
             for tasktop1 in top1_meters:
-                task_top1s.append(tasktop1)
+                task_top1s.append(tasktop1.avg)
     return task_top1s
 
 def validate_mfnet_mo_gaze(model, test_iterator, num_outputs, use_gaze, use_hands, cur_epoch, dataset, log_file):
