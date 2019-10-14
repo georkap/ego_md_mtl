@@ -90,7 +90,7 @@ def main():
     for i in range(args.mfnet_eval):
         crop_type = CenterCrop((224, 224)) if args.eval_crop == 'center' else RandomCrop((224, 224))
         if args.eval_sampler == 'middle':
-            val_sampler = MiddleSampling(num=args.clip_length)
+            val_sampler = MiddleSampling(num=args.clip_length, window=args.eval_window)
         else:
             val_sampler = RandomSampling(num=args.clip_length,
                                          interval=args.frame_interval,
