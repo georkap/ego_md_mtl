@@ -128,13 +128,13 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
                 outputs_per_dataset[dataset_id].append(tmp_outputs)
             global_task_id += num_cls_tasks
             num_coord_tasks = num_g_tasks + 2*num_h_tasks
-            loss, cls_losses, gaze_coord_losses, hand_coord_losses = \
-                get_mtl_losses(targets_per_dataset[dataset_id],
-                               outputs_per_dataset[dataset_id],
-                               coords[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id+num_coord_tasks, :],
-                               heatmaps[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id+num_coord_tasks, :],
-                               (num_cls_tasks, num_g_tasks, num_h_tasks),
-                               criterion)
+            coo, hea = None, None
+            if coords is not None:
+                coo = coords[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id+num_coord_tasks, :]
+                hea = heatmaps[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id+num_coord_tasks, :]
+            loss, cls_losses, gaze_coord_losses, hand_coord_losses = get_mtl_losses(
+                targets_per_dataset[dataset_id], outputs_per_dataset[dataset_id], coo, hea,
+                (num_cls_tasks, num_g_tasks, num_h_tasks), criterion)
             global_coord_id += num_coord_tasks
             full_loss.append(loss)
 
@@ -246,13 +246,13 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
                     outputs_per_dataset[dataset_id].append(tmp_outputs)
                 global_task_id += num_cls_tasks
                 num_coord_tasks = num_g_tasks + 2 * num_h_tasks
-                loss, cls_losses, gaze_coord_losses, hand_coord_losses = \
-                    get_mtl_losses(targets_per_dataset[dataset_id],
-                                   outputs_per_dataset[dataset_id],
-                                   coords[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id + num_coord_tasks, :],
-                                   heatmaps[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id + num_coord_tasks, :],
-                                   (num_cls_tasks, num_g_tasks, num_h_tasks),
-                                   criterion)
+                coo, hea = None, None
+                if coords is not None:
+                    coo = coords[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id + num_coord_tasks, :]
+                    hea = heatmaps[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id + num_coord_tasks, :]
+                loss, cls_losses, gaze_coord_losses, hand_coord_losses = get_mtl_losses(
+                    targets_per_dataset[dataset_id], outputs_per_dataset[dataset_id], coo, hea,
+                    (num_cls_tasks, num_g_tasks, num_h_tasks), criterion)
                 global_coord_id += num_coord_tasks
 
                 # update metrics
