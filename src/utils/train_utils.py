@@ -127,7 +127,8 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
             global_task_id += num_cls_tasks
             num_coord_tasks = num_g_tasks + 2*num_h_tasks
             loss, cls_losses, gaze_coord_losses, hand_coord_losses = \
-                get_mtl_losses(targets_per_dataset[dataset_id], outputs_per_dataset[dataset_id],
+                get_mtl_losses(targets_per_dataset[dataset_id],
+                               outputs_per_dataset[dataset_id],
                                coords[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id+num_coord_tasks, :],
                                heatmaps[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id+num_coord_tasks, :],
                                (num_cls_tasks, num_g_tasks, num_h_tasks),

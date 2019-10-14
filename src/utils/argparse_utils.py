@@ -247,6 +247,7 @@ def compare_tasks_per_dataset(train_td, eval_td):
     for i, td in enumerate(train_td):
         if td['dataset'] == eval_dataset:
             dataset_id = i
+            break
         else:
             starting_cls_id += td['num_cls_tasks']
             starting_g_id += td['num_g_tasks']
