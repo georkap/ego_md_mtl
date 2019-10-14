@@ -120,6 +120,8 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
             targets_per_dataset.append(tmp_targets)
             outputs_per_dataset.append([])
             if not len(tmp_targets[0]) > 0:
+                global_task_id += num_cls_tasks
+                global_coord_id += (num_g_tasks + 2 * num_h_tasks)
                 continue
             for task_id in range(num_cls_tasks):
                 tmp_outputs = outputs[global_task_id+task_id][batch_ids_per_dataset[dataset_id]]
@@ -236,6 +238,8 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
                 targets_per_dataset.append(tmp_targets)
                 outputs_per_dataset.append([])
                 if not len(tmp_targets[0]) > 0:
+                    global_task_id += num_cls_tasks
+                    global_coord_id += (num_g_tasks + 2 * num_h_tasks)
                     continue
                 for task_id in range(num_cls_tasks):
                     tmp_outputs = outputs[global_task_id + task_id][batch_ids_per_dataset[dataset_id]]
