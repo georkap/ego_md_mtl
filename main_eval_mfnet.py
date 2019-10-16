@@ -77,8 +77,10 @@ def main():
                 checkpoint['state_dict'][cls_task_base_name.format(i, layer)] = \
                     checkpoint['state_dict'][cls_task_base_name.format(i + starting_cls_id, layer)]
         starting_coord_id = starting_g_id + 2 * starting_h_id
-        checkpoint['state_dict']['module.coord_layers.hm_conv.weight'] = \
-            checkpoint['state_dict']['module.coord_layers.hm_conv.weight'][starting_coord_id:starting_coord_id+num_coords]
+        if num_coords > 0:
+            checkpoint['state_dict']['module.coord_layers.hm_conv.weight'] = \
+                checkpoint['state_dict']['module.coord_layers.hm_conv.weight'][starting_coord_id:
+                                                                               starting_coord_id+num_coords]
 
     model_ft.load_state_dict(checkpoint['state_dict'], strict=(args.eval_tasks is None))
     print_and_save("Model loaded on gpu {} devices".format(args.gpus), log_file)
