@@ -98,10 +98,10 @@ def main():
     val_iter = torch.utils.data.DataLoader(val_loader, batch_size=args.batch_size, shuffle=False,
                                            num_workers=args.num_workers, pin_memory=True)
 
-    outputs = validate_mfnet_mo_json(model_ft, val_iter, args.val_list.split("\\")[-1],
+    outputs = validate_mfnet_mo_json(model_ft, val_iter, args.val_lists[0].split("\\")[-1],
                                      action_file=args.epic_actions_path)
 
-    eval_mode = 'seen' if 's1' in args.val_list else 'unseen' if 's2' in args.val_list else 'unknown'
+    eval_mode = 'seen' if 's1' in args.val_lists[0] else 'unseen' if 's2' in args.val_lists[0] else 'unknown'
     json_file = "{}.json".format(os.path.join(output_dir, eval_mode))
     with open(json_file, 'w') as jf:
         json.dump(outputs, jf)
