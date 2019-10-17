@@ -10,7 +10,7 @@ Make unseen kitchen split epic
 import os, pandas
 
 BASE_DIR = r"data\EPIC_KITCHENS\frames_rgb_flow\rgb\test"
-SPLITS_DIR = r"..\splits\epic_rgb\test"
+SPLITS_DIR = r"..\splits\EPIC_KITCHENS\test"
 os.makedirs(SPLITS_DIR, exist_ok=True)
 
 s1_test_name = os.path.join(SPLITS_DIR, "epic_rgb_s1.txt")
