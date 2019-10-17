@@ -94,12 +94,10 @@ def main():
         if args.eval_sampler == 'middle':
             val_sampler = MiddleSampling(num=args.clip_length, window=args.eval_window)
         else:
-            val_sampler = RandomSampling(num=args.clip_length,
-                                         interval=args.frame_interval,
-                                         speed=[1.0, 1.0], seed=i)
+            val_sampler = RandomSampling(num=args.clip_length, interval=args.frame_interval, speed=[1.0, 1.0], seed=i)
 
-        val_transforms = transforms.Compose([Resize((256, 256), False), crop_type,
-                                             ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
+        val_transforms = transforms.Compose([Resize((256, 256), False), crop_type, ToTensorVid(),
+                                             Normalize(mean=mean_3d, std=std_3d)])
 
         val_loader = MultitaskDatasetLoader(val_sampler, args.val_lists, args.dataset, tasks_per_dataset,
                                             batch_transform=val_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
@@ -108,8 +106,8 @@ def main():
                                                num_workers=args.num_workers, pin_memory=True)
 
         # evaluate dataset
-        top1, outputs = validate(model_ft, ce_loss, val_iter, num_objectives, tasks_per_dataset,
-                                 checkpoint['epoch'], args.dataset, log_file)
+        top1, outputs = validate(model_ft, ce_loss, val_iter, num_objectives, checkpoint['epoch'], args.dataset,
+                                 log_file)
 
         # calculate statistics
         for ind in range(len(num_classes)):

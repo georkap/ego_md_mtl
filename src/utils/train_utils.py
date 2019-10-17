@@ -372,27 +372,33 @@ def validate_mfnet_mo_json(model, test_iterator, dataset, action_file):
             batch_size = outputs[0].size(0)
 
             for j in range(batch_size):
-                action = outputs[0][j].detach().cpu().numpy().astype(np.float64)
-                verb = outputs[1][j].detach().cpu().numpy().astype(np.float64)
-                noun = outputs[2][j].detach().cpu().numpy().astype(np.float64)
-
                 json_outputs['results'][str(uid[j].item())] = {'verb': {}, 'noun': {}, 'action': {}}
-                for i, v in enumerate(verb):
-                    json_outputs['results'][str(uid[j].item())]['verb'][str(i)] = v
-                for i, n in enumerate(noun):
-                    json_outputs['results'][str(uid[j].item())]['noun'][str(i)] = n
-                # for i in range(322, 352):
-                #     json_outputs['results'][str(uid[j].item())]['noun'][str(i)]=0.0
+
+                if len(outputs) >= 1: # if there is action prediction
+                    action = outputs[0][j].detach().cpu().numpy().astype(np.float64)
+                if len(outputs) >= 2: # if there is verb prediction
+                    verb = outputs[1][j].detach().cpu().numpy().astype(np.float64)
+                    for i, v in enumerate(verb):
+                        json_outputs['results'][str(uid[j].item())]['verb'][str(i)] = v
+                else:
+                    json_outputs['results'][str(uid[j].item())]['verb'] = np.zeros(125, dtype=np.float32).round(3)
+                if len(outputs) >= 3: # if there is noun prediction
+                    noun = outputs[2][j].detach().cpu().numpy().astype(np.float64)
+                    for i, n in enumerate(noun):
+                        json_outputs['results'][str(uid[j].item())]['noun'][str(i)] = n
+                else:
+                    json_outputs['results'][str(uid[j].item())]['noun'] = np.zeros(352, dtype=np.float32).round(3)
+
                 action_sort_ids = np.argsort(action)[::-1]
                 for i, a_id in enumerate(action_sort_ids[:100]):
                     a = action[a_id]
                     class_key = all_action_ids[all_action_ids.action_id == a_id].class_key.item()
-                    json_outputs['results'][str(uid[j].item())]['action'][class_key.replace('_', ',')] = a
+                    json_outputs['results'][str(uid[j].item())]['action'][class_key.replace('_', ',')] = a.round(3)
             print('\r[Batch {}/{}]'.format(batch_idx, len(test_iterator)), end='')
 
     return json_outputs
 
-def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, tasks_per_dataset, cur_epoch, dataset, log_file):
+def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, cur_epoch, dataset, log_file):
     num_cls_outputs, num_g_outputs, num_h_outputs = num_outputs
     losses = AverageMeter()
     top1_meters = [AverageMeter() for _ in range(num_cls_outputs)]
