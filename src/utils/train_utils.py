@@ -382,14 +382,14 @@ def validate_mfnet_mo_json(model, test_iterator, dataset, action_file):
                         json_outputs['results'][str(uid[j].item())]['verb'][str(i)] = v
                 else:
                     for i in range(125):
-                        json_outputs['results'][str(uid[j].item())]['verb'][str(i)] = np.round(0, decimals=3)
+                        json_outputs['results'][str(uid[j].item())]['verb'][str(i)] = np.round(0.0, decimals=3)
                 if len(outputs) >= 3: # if there is noun prediction
                     noun = outputs[2][j].detach().cpu().numpy().astype(np.float64)
                     for i, n in enumerate(noun):
                         json_outputs['results'][str(uid[j].item())]['noun'][str(i)] = n
                 else:
                     for i in range(352):
-                        json_outputs['results'][str(uid[j].item())]['noun'][str(i)] = np.round(0, decimals=3)
+                        json_outputs['results'][str(uid[j].item())]['noun'][str(i)] = np.round(0.0, decimals=3)
 
                 action_sort_ids = np.argsort(action)[::-1]
                 for i, a_id in enumerate(action_sort_ids[:100]):
