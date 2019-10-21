@@ -89,7 +89,8 @@ class MFNET_3D(nn.Module):
         self.num_coords = kwargs.get('num_coords', 0)
 
         groups = 16
-        k_sec = {2: 3, 3: 4, 4: 6, 5: 3}
+        # k_sec = {2: 3, 3: 4, 4: 6, 5: 3}
+        k_sec = kwargs.get('k_sec', {2: 3, 3: 4, 4: 6, 5: 3})
 
         # conv1 - x224 (x16)
         conv1_num_out = 16

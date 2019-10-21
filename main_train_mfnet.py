@@ -39,12 +39,23 @@ def main():
     mfnet_3d = MFNET_3D_MO  # mfnet 3d multi output
     kwargs = dict()
     kwargs["num_coords"] = num_coords
+    if args.long:
+        kwargs["k_sec"] = {2: 3, 3: 4, 4: 11, 5: 3}
     model_ft = mfnet_3d(num_classes, dropout=args.dropout, **kwargs)
     if args.pretrained:
         checkpoint = torch.load(args.pretrained_model_path)
         # below line is needed if network is trained with DataParallel
         base_dict = {'.'.join(k.split('.')[1:]): v for k, v in list(checkpoint['state_dict'].items())}
         base_dict = {k: v for k, v in list(base_dict.items()) if 'classifier' not in k}
+        if args.long:
+            conv4_keys = [k for k in list(base_dict.keys()) if k.startswith('conv4')]
+            import re
+            for i, key in enumerate(conv4_keys):
+                orig_layer_id = int(re.search(r"B\d{2}", key).group()[1:])
+                if orig_layer_id == 1:
+                    continue
+                new_key = re.sub(re.search(r"B\d{2}", key).group(), "B{:02d}".format(orig_layer_id+5), key)
+                base_dict[new_key] = base_dict[key]
         model_ft.load_state_dict(base_dict, strict=False)  # model.load_state_dict(checkpoint['state_dict'])
     model_ft.cuda(device=args.gpus[0])
     model_ft = torch.nn.DataParallel(model_ft, device_ids=args.gpus, output_device=args.gpus[0])
