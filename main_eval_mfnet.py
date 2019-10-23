@@ -66,7 +66,8 @@ def main():
 
     kwargs = dict()
     kwargs['num_coords'] = num_coords
-
+    if args.long:
+        kwargs["k_sec"] = {2: 3, 3: 4, 4: 11, 5: 3}
     model_ft = mfnet_3d(num_classes, **kwargs)
     model_ft = torch.nn.DataParallel(model_ft).cuda()
     checkpoint = torch.load(args.ckpt_path, map_location={'cuda:1': 'cuda:0'})
