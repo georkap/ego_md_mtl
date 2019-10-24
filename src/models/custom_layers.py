@@ -10,8 +10,7 @@ class CoordRegressionLayer(nn.Module):
         self.probability = nn.Linear(input_filters, 1, bias=False)
 
     def forward(self, h):
-
-        probabilities = 0 # torch.nn.ReLU(self.probability(torch.squeeze(h)))
+        probabilities = torch.zeros(0, device=h.device) # torch.nn.ReLU(self.probability(torch.squeeze(h)))
         # 1. Use a 1x1 conv to get one unnormalized heatmap per location
         unnormalized_heatmaps = self.hm_conv(h)
         # 2. Transpose the heatmap volume to keep the temporal dimension in the volume
