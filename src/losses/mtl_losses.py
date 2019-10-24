@@ -4,9 +4,10 @@ from src.losses.coord_loss import gaze_loss, hand_loss
 from src.losses.min_norm_solvers import MinNormSolver, gradient_normalizers
 
 
-def get_mtl_losses(targets, outputs, coords, heatmaps, num_outputs, criterion):
+def get_mtl_losses(targets, masks, outputs, coords, heatmaps, probabilities, num_outputs, criterion):
     num_cls_outputs, num_g_outputs, num_h_outputs = num_outputs
     targets_starting_point = num_cls_outputs
+    masks_starting_point = 0
     slice_from = 0
     cls_targets = targets[:num_cls_outputs, :].long()
     cls_losses = []
@@ -19,16 +20,20 @@ def get_mtl_losses(targets, outputs, coords, heatmaps, num_outputs, criterion):
 
     gaze_coord_losses, hand_coord_losses = [], []
     if num_g_outputs > 0:
-        gaze_coord_loss = gaze_loss(targets, start_from=targets_starting_point, coords=coords, heatmaps=heatmaps,
-                                    slice_ind=slice_from)
+        gaze_coord_loss = gaze_loss(targets, masks, targets_start_from=targets_starting_point,
+                                    masks_start_from=masks_starting_point, coords=coords, heatmaps=heatmaps,
+                                    probabilities=probabilities, slice_ind=slice_from)
         targets_starting_point += 16
+        masks_starting_point += 8
         slice_from += 1
         loss = loss + gaze_coord_loss
         gaze_coord_losses.append(gaze_coord_loss)
     if num_h_outputs > 0:
-        hand_coord_loss = hand_loss(targets, start_from=targets_starting_point, coords=coords, heatmaps=heatmaps,
-                                    slice_from=slice_from)
+        hand_coord_loss = hand_loss(targets, masks, targets_start_from=targets_starting_point,
+                                    masks_start_from=masks_starting_point, coords=coords, heatmaps=heatmaps,
+                                    probabilities=probabilities, slice_from=slice_from)
         targets_starting_point += 32
+        masks_starting_point += 16
         slice_from += 2
         loss = loss + hand_coord_loss
         hand_coord_losses.append(hand_coord_loss)

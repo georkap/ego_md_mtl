@@ -186,7 +186,7 @@ class MFNET_3D(nn.Module):
             h = self.tail(h)
             coords, heatmaps = None, None
             if self.num_coords > 0:
-                coords, heatmaps = self.coord_layers(h)
+                coords, heatmaps, probabilities = self.coord_layers(h)
 
             h = self.globalpool(h)
 
@@ -194,7 +194,7 @@ class MFNET_3D(nn.Module):
 
             h_out = self.classifier_list(h)
 
-            return h_out, coords, heatmaps
+            return h_out, coords, heatmaps, probabilities
         elif upto == 'shared':
             return self.forward_shared_block(x)
         elif upto == 'cls':
@@ -222,10 +222,10 @@ class MFNET_3D(nn.Module):
         return h, h_tail
 
     def forward_coord_layers(self, h_tail):
-        coords, heatmaps = None, None
+        coords, heatmaps, probabilities = None, None, None
         if self.num_coords > 0:
-            coords, heatmaps = self.coord_layers(h_tail)
-        return coords, heatmaps
+            coords, heatmaps, probabilities = self.coord_layers(h_tail)
+        return coords, heatmaps, probabilities
 
     def forward_cls_layers(self, h):
         h_out = self.classifier_list(h)
@@ -240,7 +240,7 @@ if __name__ == "__main__":
     data = torch.randn(1, 3, 16, 224, 224, requires_grad=True)
     output = net(data)
     h, htail = net.forward_shared_block(data)
-    coords, heatmaps = net.forward_coord_layers(htail)
+    coords, heatmaps, probabilities = net.forward_coord_layers(htail)
     output = net.forward_cls_layers(h)
 #    torch.save({'state_dict': net.state_dict()}, './tmp.pth')
     print(len(output))

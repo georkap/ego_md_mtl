@@ -202,6 +202,13 @@ def vis_with_circle_gaze(img, gaze_point, winname):
     k = cv2.circle(img.copy(), (int(gaze_point[0]), int(gaze_point[1])), 10, (0, 255, 0), 4)  # green is gaze
     cv2.imshow(winname, k)
 
+def mask_coord_bounds(track):
+    mask_lower = track >= [-1, -1]
+    mask_lower = mask_lower[:, 0] & mask_lower[:, 1]
+    mask_upper = track <= [1, 1]
+    mask_upper = mask_upper[:, 0] & mask_upper[:, 1]
+    mask = mask_lower & mask_upper
+    return mask
 
 class MultitaskDatasetLoader(torchDataset):
 
@@ -326,7 +333,9 @@ class MultitaskDatasetLoader(torchDataset):
                 left_track_vis = left_track
                 right_track_vis = right_track
             left_track = left_track[::2]
+            # left_hand_mask = left_track[:, 1] <= norm_val[1]
             right_track = right_track[::2]
+            # right_hand_mask = right_track[:, 1] <= norm_val[1]
 
         # gaze points is the final output, gaze data is the pickle data, gaze track is intermediate versions
         gaze_points, gaze_data, gaze_track = None, None, None
@@ -339,6 +348,8 @@ class MultitaskDatasetLoader(torchDataset):
                 gaze_track_vis = gaze_track
             if 'DoubleFullSampling' not in self.sampler.__repr__():
                 gaze_track = gaze_track[::2]
+            gaze_mask = gaze_track != [0, 0]
+            gaze_mask = gaze_mask[:, 0] & gaze_mask[:, 1]
             gaze_track *= norm_val[:2]
 
         if self.transform is not None:
@@ -354,12 +365,15 @@ class MultitaskDatasetLoader(torchDataset):
                     right_track = apply_transform_to_track(right_track, scale_x, scale_y, tl_x, tl_y, norm_val, is_flipped)
                 if use_gaze:
                     gaze_track = apply_transform_to_track(gaze_track, scale_x, scale_y, tl_x, tl_y, norm_val, is_flipped)
-        # regardless of the transfoms the tracks should be normalized to [-1,1] for the dsnt layer
+        # regardless of the transforms the tracks should be normalized to [-1,1] for the dsnt layer
         if use_hands:
             left_track = make_dsnt_track(left_track, norm_val)
             right_track = make_dsnt_track(right_track, norm_val)
+            left_hand_mask = mask_coord_bounds(left_track)
+            right_hand_mask = mask_coord_bounds(right_track)
         if use_gaze:
             gaze_track = make_dsnt_track(gaze_track, norm_val)
+            gaze_mask = gaze_mask & mask_coord_bounds(gaze_track)
 
         if self.vis_data:
             # for i in range(len(sampled_frames)):
@@ -392,6 +406,7 @@ class MultitaskDatasetLoader(torchDataset):
 
         # get the classification task labels
         labels = list()
+        masks = list()
         all_cls_tasks = self.dataset_infos[dataset_name].cls_tasks
         all_cls_tasks_names = list(self.dataset_infos[dataset_name].max_num_classes.keys())
         tasks_for_dataset = self.dataset_infos[dataset_name].td
@@ -409,21 +424,26 @@ class MultitaskDatasetLoader(torchDataset):
         if use_gaze:
             gaze_points = gaze_track.astype(np.float32).flatten()
             labels = np.concatenate((labels, gaze_points))
+            masks = np.concatenate((masks, gaze_mask)).astype(np.bool)
         if use_hands:
             hand_points = np.concatenate((left_track[:, np.newaxis, :], right_track[:, np.newaxis, :]), axis=1).astype(
                 np.float32)
             hand_points = hand_points.flatten()
             labels = np.concatenate((labels, hand_points))
+            masks = np.concatenate((masks, left_hand_mask, right_hand_mask)).astype(np.bool)
 
+        # this is for the dataloader only, to avoid having uneven sizes in the label/mask dimension of the batch
         if len(labels) < self.maximum_target_size:
             labels = np.concatenate((labels, [0.0]*(self.maximum_target_size-len(labels)))).astype(np.float32)
+        if len(masks) < self.maximum_target_size:
+            masks = np.concatenate((masks, [False]*(self.maximum_target_size-len(masks)))).astype(np.float32)
         if self.validation:
             return clip_input, labels, validation_id
         elif self.eval_gaze and use_gaze:
             orig_gaze = np.array([[value[0], value[1]] for key, value in gaze_data.items()], dtype=np.float32).flatten()
             return clip_input, labels, dataset_id, orig_gaze, validation_id
         else:
-            return clip_input, labels, dataset_id
+            return clip_input, labels, masks, dataset_id
 
 
 if __name__ == '__main__':

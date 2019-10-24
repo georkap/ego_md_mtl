@@ -7,8 +7,11 @@ class CoordRegressionLayer(nn.Module):
     def __init__(self, input_filters, n_locations):
         super(CoordRegressionLayer, self).__init__()
         self.hm_conv = nn.Conv3d(input_filters, n_locations, kernel_size=1, bias=False)
+        self.probability = nn.Linear(input_filters, 1, bias=False)
 
     def forward(self, h):
+
+        probabilities = 0 # torch.nn.ReLU(self.probability(torch.squeeze(h)))
         # 1. Use a 1x1 conv to get one unnormalized heatmap per location
         unnormalized_heatmaps = self.hm_conv(h)
         # 2. Transpose the heatmap volume to keep the temporal dimension in the volume
@@ -20,4 +23,4 @@ class CoordRegressionLayer(nn.Module):
         heatmaps = torch.stack(heatmaps, 1)
         coords = torch.stack(coords, 1)
 
-        return coords, heatmaps
+        return coords, heatmaps, probabilities

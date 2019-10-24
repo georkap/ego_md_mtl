@@ -75,7 +75,7 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
     print_and_save('*********', log_file)
     print_and_save('Beginning of epoch: {}'.format(cur_epoch), log_file)
     t0 = time.time()
-    for batch_idx, (inputs, targets, dataset_ids) in enumerate(train_iterator):
+    for batch_idx, (inputs, targets, masks, dataset_ids) in enumerate(train_iterator):
         if isinstance(lr_scheduler, CyclicLR):
             lr_scheduler.step()
 
@@ -105,10 +105,11 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
         #                                                                             num_outputs, tasks_per_dataset,
         #                                                                             criterion)
 
-        outputs, coords, heatmaps = model(inputs)
+        outputs, coords, heatmaps, probabilities = model(inputs)
 
         outputs_per_dataset = []
         targets_per_dataset = []
+        masks_per_dataset = []
         global_task_id = 0
         global_coord_id = 0
         full_loss = []
@@ -117,7 +118,9 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
             num_g_tasks = tasks_per_dataset[dataset_id]['num_g_tasks']
             num_h_tasks = tasks_per_dataset[dataset_id]['num_h_tasks']
             tmp_targets = targets[batch_ids_per_dataset[dataset_id]].cuda(gpus[0]).transpose(0, 1)
+            tmp_masks = masks[batch_ids_per_dataset[dataset_id]].cuda(gpus[0])
             targets_per_dataset.append(tmp_targets)
+            masks_per_dataset.append(tmp_masks)
             outputs_per_dataset.append([])
             if not len(tmp_targets[0]) > 0:
                 global_task_id += num_cls_tasks
@@ -128,13 +131,14 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
                 outputs_per_dataset[dataset_id].append(tmp_outputs)
             global_task_id += num_cls_tasks
             num_coord_tasks = num_g_tasks + 2*num_h_tasks
-            coo, hea = None, None
+            coo, hea, pro = None, None, None
             if coords is not None:
                 coo = coords[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id+num_coord_tasks, :]
                 hea = heatmaps[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id+num_coord_tasks, :]
+                # pro = probabilities[batch_ids_per_dataset[dataset_ids], :]
             loss, cls_losses, gaze_coord_losses, hand_coord_losses = get_mtl_losses(
-                targets_per_dataset[dataset_id], outputs_per_dataset[dataset_id], coo, hea,
-                (num_cls_tasks, num_g_tasks, num_h_tasks), criterion)
+                targets_per_dataset[dataset_id], masks_per_dataset[dataset_id], outputs_per_dataset[dataset_id],
+                coo, hea, pro, (num_cls_tasks, num_g_tasks, num_h_tasks), criterion)
             global_coord_id += num_coord_tasks
             full_loss.append(loss)
 
@@ -213,7 +217,7 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
     with torch.no_grad():
         model.eval()
         print_and_save('Evaluating after epoch: {} on {} set'.format(cur_epoch, dataset), log_file)
-        for batch_idx, (inputs, targets, dataset_ids) in enumerate(test_iterator):
+        for batch_idx, (inputs, targets, masks, dataset_ids) in enumerate(test_iterator):
             inputs = inputs.cuda(gpus[0])
             batch_size = dataset_ids.shape[0]
 
@@ -224,10 +228,11 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
             for batch_ind, dataset_id in enumerate(dataset_ids):
                 batch_ids_per_dataset[dataset_id].append(batch_ind)
 
-            outputs, coords, heatmaps = model(inputs)
+            outputs, coords, heatmaps, probabilities = model(inputs)
 
             outputs_per_dataset = []
             targets_per_dataset = []
+            masks_per_dataset = []
             global_task_id = 0
             global_coord_id = 0
             for dataset_id in range(num_datasets):
@@ -235,7 +240,9 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
                 num_g_tasks = tasks_per_dataset[dataset_id]['num_g_tasks']
                 num_h_tasks = tasks_per_dataset[dataset_id]['num_h_tasks']
                 tmp_targets = targets[batch_ids_per_dataset[dataset_id]].cuda(gpus[0]).transpose(0, 1)
+                tmp_masks = masks[batch_ids_per_dataset[dataset_id]].cuda(gpus[0])
                 targets_per_dataset.append(tmp_targets)
+                masks_per_dataset.append(tmp_masks)
                 outputs_per_dataset.append([])
                 if not len(tmp_targets[0]) > 0:
                     global_task_id += num_cls_tasks
@@ -246,13 +253,14 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
                     outputs_per_dataset[dataset_id].append(tmp_outputs)
                 global_task_id += num_cls_tasks
                 num_coord_tasks = num_g_tasks + 2 * num_h_tasks
-                coo, hea = None, None
+                coo, hea, pro = None, None, None
                 if coords is not None:
                     coo = coords[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id + num_coord_tasks, :]
                     hea = heatmaps[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id + num_coord_tasks, :]
+                    # pro = probabilities[batch_ids_per_dataset[dataset_ids], :]
                 loss, cls_losses, gaze_coord_losses, hand_coord_losses = get_mtl_losses(
-                    targets_per_dataset[dataset_id], outputs_per_dataset[dataset_id], coo, hea,
-                    (num_cls_tasks, num_g_tasks, num_h_tasks), criterion)
+                    targets_per_dataset[dataset_id], masks_per_dataset[dataset_id], outputs_per_dataset[dataset_id],
+                    coo, hea, pro, (num_cls_tasks, num_g_tasks, num_h_tasks), criterion)
                 global_coord_id += num_coord_tasks
 
                 # update metrics
