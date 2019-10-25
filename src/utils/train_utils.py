@@ -418,12 +418,14 @@ def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, cur_epoch, d
     print_and_save('Evaluating after epoch: {} on {} set'.format(cur_epoch, dataset), log_file)
     with torch.no_grad():
         model.eval()
-        for batch_idx, (inputs, targets, video_names) in enumerate(test_iterator):
+        for batch_idx, (inputs, targets, masks, video_names) in enumerate(test_iterator):
             inputs = inputs.cuda()
-            outputs, coords, heatmaps = model(inputs)
+            outputs, coords, heatmaps, probabilities = model(inputs)
             targets = targets.cuda().transpose(0, 1)
+            masks = masks.cuda()
 
-            loss, cls_losses, gaze_coord_losses, hand_coord_losses = get_mtl_losses(targets, outputs, coords, heatmaps,
+            loss, cls_losses, gaze_coord_losses, hand_coord_losses = get_mtl_losses(targets, masks, outputs, coords,
+                                                                                    heatmaps, probabilities,
                                                                                     num_outputs, criterion)
 
             batch_size = outputs[0].size(0)

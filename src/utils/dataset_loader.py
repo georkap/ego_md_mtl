@@ -438,7 +438,7 @@ class MultitaskDatasetLoader(torchDataset):
         if len(masks) < self.maximum_target_size:
             masks = np.concatenate((masks, [False]*(self.maximum_target_size-len(masks)))).astype(np.float32)
         if self.validation:
-            return clip_input, labels, validation_id
+            return clip_input, labels, masks, validation_id
         elif self.eval_gaze and use_gaze:
             orig_gaze = np.array([[value[0], value[1]] for key, value in gaze_data.items()], dtype=np.float32).flatten()
             return clip_input, labels, dataset_id, orig_gaze, validation_id
