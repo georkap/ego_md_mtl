@@ -87,6 +87,7 @@ class MFNET_3D(nn.Module):
         # (e.g. actions->actions and not actions->verbs,nouns etc.)
         self.num_classes = num_classes
         self.num_coords = kwargs.get('num_coords', 0)
+        self.num_objects = kwargs.get('num_objects', 0)
 
         groups = 16
         # k_sec = {2: 3, 3: 4, 4: 6, 5: 3}
@@ -167,6 +168,9 @@ class MFNET_3D(nn.Module):
 
         self.classifier_list = MultitaskClassifiers(conv5_num_out, num_classes)
 
+        if self.num_objects > 0:
+            self.object_classifier = nn.Linear(conv5_num_out, self.num_objects)
+
         #############
         # Initialization
         xavier(net=self)
@@ -184,7 +188,7 @@ class MFNET_3D(nn.Module):
             h = self.conv5(h)  # x14 ->   x7
 
             h = self.tail(h)
-            coords, heatmaps = None, None
+            coords, heatmaps, probabilities = None, None, None
             if self.num_coords > 0:
                 coords, heatmaps, probabilities = self.coord_layers(h)
 
@@ -194,7 +198,9 @@ class MFNET_3D(nn.Module):
 
             h_out = self.classifier_list(h)
 
-            return h_out, coords, heatmaps, probabilities
+            objects = self.object_classifier(h)
+
+            return h_out, coords, heatmaps, probabilities, objects
         elif upto == 'shared':
             return self.forward_shared_block(x)
         elif upto == 'cls':

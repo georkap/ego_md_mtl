@@ -154,8 +154,8 @@ def parse_samples_list(list_file, datatype):
     return [datatype(x.strip().split(' ')) for x in open(list_file)]
 
 class DatasetInfo(object):
-    def __init__(self, dataset_id, dataset_name, data_line, img_tmpl, norm_val, tasks_for_dataset, cls_tasks, max_num_classes,
-                 gaze_list_prefix, hand_list_prefix, video_list):
+    def __init__(self, dataset_id, dataset_name, data_line, img_tmpl, norm_val, tasks_for_dataset, cls_tasks,
+                 max_num_classes, gaze_list_prefix, hand_list_prefix, object_list_prefix, video_list):
         self.dataset_id = dataset_id
         self.dataset_name = dataset_name
         self.data_line = data_line
@@ -163,6 +163,7 @@ class DatasetInfo(object):
         self.norm_val = norm_val
         self.gaze_list_prefix = gaze_list_prefix
         self.hand_list_prefix = hand_list_prefix
+        self.object_list_prefix = object_list_prefix
         self.td = tasks_for_dataset
         self.cls_tasks = cls_tasks
         self.max_num_classes = max_num_classes
@@ -210,10 +211,17 @@ def mask_coord_bounds(track):
     mask = mask_lower & mask_upper
     return mask
 
-class MultitaskDatasetLoader(torchDataset):
+def object_list_to_bpv(detections, num_noun_classes):
+    bpv = np.zeros(num_noun_classes, dtype=np.float32)
+    for i, dets in enumerate(detections):
+        for obj in dets:
+            bpv[obj] = 1 # set 1 to the objects that are seen in any of the frames, not really important when
+    return bpv
 
+class MultitaskDatasetLoader(torchDataset):
     def __init__(self, sampler, split_files, datasets, tasks_per_dataset, batch_transform,
-                 gaze_list_prefix, hand_list_prefix, validation=False, eval_gaze=False, vis_data=False):
+                 gaze_list_prefix, hand_list_prefix, object_list_prefix,
+                 validation=False, eval_gaze=False, vis_data=False):
         self.sampler = sampler
         assert len(datasets) == len(tasks_per_dataset) # 1-1 association between dataset name, split file and resp tasks
         self.video_list = list()
@@ -222,6 +230,7 @@ class MultitaskDatasetLoader(torchDataset):
         for i, (dataset_name, split_file, td) in enumerate(zip(datasets, split_files, tasks_per_dataset)):
             glp = gaze_list_prefix.pop(0) if 'G' in td else None
             hlp = hand_list_prefix.pop(0) if 'H' in td else None
+            olp = object_list_prefix.pop(0) if 'O' in td else None
             if dataset_name == 'epick':
                 data_line = EPICDataLine
                 img_tmpl = 'frame_{:010d}.jpg'
@@ -240,7 +249,7 @@ class MultitaskDatasetLoader(torchDataset):
                 # undeveloped dataset yet e.g. something something or whatever
                 pass
             dat_info = DatasetInfo(i, dataset_name, data_line, img_tmpl, norm_val, td, cls_tasks, max_num_classes, glp,
-                                   hlp, video_list)
+                                   hlp, olp, video_list)
             self.maximum_target_size = td['max_target_size'] if td['max_target_size'] > self.maximum_target_size else self.maximum_target_size
             self.dataset_infos[dataset_name] = dat_info
             self.video_list += video_list
@@ -277,6 +286,8 @@ class MultitaskDatasetLoader(torchDataset):
         hand_track_path = None
         use_gaze = False
         gaze_track_path = None
+        use_objects = False
+        obj_track_path = None
         if isinstance(data_line, EPICDataLine): # parse EPIC line
             dataset_name = 'epick'
             path = data_line.data_path
@@ -290,6 +301,12 @@ class MultitaskDatasetLoader(torchDataset):
                 path_d, path_ds, a, b, c, pid, vid_id = path.split("\\")
                 hand_track_path = os.path.join(path_d, path_ds, self.dataset_infos[dataset_name].hand_list_prefix,
                                                pid, vid_id, "{}_{}_{}.pkl".format(start_frame, label_verb, label_noun))
+            if 'O' in self.dataset_infos[dataset_name].td:
+                use_objects = True
+                path_d, path_ds, a, b, c, pid, vid_id = path.split("\\")
+                obj_track_path = os.path.join(path_d, path_ds, self.dataset_infos[dataset_name].object_list_prefix,
+                                              pid, vid_id, "{}_{}_{}.pkl".format(start_frame, label_verb, label_noun))
+
         elif isinstance(data_line, GTEADataLine): # parse EGTEA line
             dataset_name = 'egtea'
             base_path, path = self.video_list[index].frames_path
@@ -311,47 +328,40 @@ class MultitaskDatasetLoader(torchDataset):
             sys.exit("Wrong data_line in dataloader.__getitem__. Exit code -2")
 
         dataset_id = self.dataset_infos[dataset_name].dataset_id
-        norm_val = self.dataset_infos[dataset_name].norm_val
+        orig_norm_val = self.dataset_infos[dataset_name].norm_val
         img_tmpl = self.dataset_infos[dataset_name].img_tmpl
         sampled_idxs = self.sampler.sampling(range_max=frame_count, v_id=index, start_frame=start_frame)
         sampled_frames = load_images(path, sampled_idxs, img_tmpl)
+        sampled_idxs = (np.array(sampled_idxs) - start_frame).astype(np.int)
 
         clip_input = np.concatenate(sampled_frames, axis=2)
         or_h, or_w, _ = clip_input.shape
 
         # hands points is the final output, hand tracks is pickle, left and right track are intermediate versions
-        hand_points, hand_tracks, left_track, right_track = None, None, None, None
+        hand_points, hand_tracks, left_track, right_track, left_track_vis, right_track_vis = None, None, None, None, None, None
         if use_hands:
             hand_tracks = load_pickle(hand_track_path)
-            left_track = np.array(hand_tracks['left'], dtype=np.float32)
-            right_track = np.array(hand_tracks['right'], dtype=np.float32)
-
-            sampled_idxs = (np.array(sampled_idxs) - start_frame).astype(np.int)
-            left_track = left_track[sampled_idxs]  # keep the points for the sampled frames
-            right_track = right_track[sampled_idxs]
-            if self.vis_data:
-                left_track_vis = left_track
-                right_track_vis = right_track
-            left_track = left_track[::2]
-            # left_hand_mask = left_track[:, 1] <= norm_val[1]
-            right_track = right_track[::2]
-            # right_hand_mask = right_track[:, 1] <= norm_val[1]
+            left_track = np.array(hand_tracks['left'], dtype=np.float32)[sampled_idxs]
+            right_track = np.array(hand_tracks['right'], dtype=np.float32)[sampled_idxs]
 
         # gaze points is the final output, gaze data is the pickle data, gaze track is intermediate versions
-        gaze_points, gaze_data, gaze_track = None, None, None
+        gaze_points, gaze_data, gaze_track, gaze_mask, gaze_track_vis = None, None, None, None, None
         if use_gaze:
             gaze_data = load_pickle(gaze_track_path)
             gaze_track = np.array([[value[0], value[1]] for key, value in gaze_data.items()], dtype=np.float32)
             if 'DoubleFullSampling' not in self.sampler.__repr__():
                 gaze_track = gaze_track[sampled_idxs]
-            if self.vis_data:
-                gaze_track_vis = gaze_track
-            if 'DoubleFullSampling' not in self.sampler.__repr__():
                 gaze_track = gaze_track[::2]
             gaze_mask = gaze_track != [0, 0]
             gaze_mask = gaze_mask[:, 0] & gaze_mask[:, 1]
-            gaze_track *= norm_val[:2]
+            gaze_track *= orig_norm_val[:2]
 
+        bpv = None
+        if use_objects:
+            object_detections = np.array(load_pickle(obj_track_path))[sampled_idxs]
+            bpv = object_list_to_bpv(object_detections, 352)
+
+        trns_norm_val = orig_norm_val
         if self.transform is not None:
             # transform the frames
             clip_input = self.transform(clip_input)
@@ -359,13 +369,32 @@ class MultitaskDatasetLoader(torchDataset):
             if use_hands or use_gaze:
                 scale_x, scale_y, tl_x, tl_y, is_flipped = self.get_scale_and_shift(or_w, or_h)
                 _, _, max_h, max_w = clip_input.shape
-                norm_val = [max_w, max_h, max_w, max_h]
+                trns_norm_val = [max_w, max_h, max_w, max_h]
                 if use_hands:
-                    left_track = apply_transform_to_track(left_track, scale_x, scale_y, tl_x, tl_y, norm_val, is_flipped)
-                    right_track = apply_transform_to_track(right_track, scale_x, scale_y, tl_x, tl_y, norm_val, is_flipped)
+                    left_track = apply_transform_to_track(left_track, scale_x, scale_y, tl_x, tl_y, trns_norm_val,
+                                                          is_flipped)
+                    right_track = apply_transform_to_track(right_track, scale_x, scale_y, tl_x, tl_y, trns_norm_val,
+                                                           is_flipped)
                 if use_gaze:
-                    gaze_track = apply_transform_to_track(gaze_track, scale_x, scale_y, tl_x, tl_y, norm_val, is_flipped)
+                    gaze_track = apply_transform_to_track(gaze_track, scale_x, scale_y, tl_x, tl_y, trns_norm_val,
+                                                          is_flipped)
+        norm_val = trns_norm_val if self.transform is not None else orig_norm_val
+        if use_hands:
+            if self.vis_data:
+                left_track_vis = left_track
+                right_track_vis = right_track
+            left_track = left_track[::2]
+            right_track = right_track[::2]
+        if use_gaze and self.vis_data:
+            gaze_track_vis = np.array([[value[0], value[1]] for key, value in gaze_data.items()], dtype=np.float32)
+            if 'DoubleFullSampling' not in self.sampler.__repr__():
+                gaze_track_vis = gaze_track_vis[sampled_idxs]
+            gaze_track_vis *= orig_norm_val[:2]
+            gaze_track_vis = apply_transform_to_track(gaze_track_vis, scale_x, scale_y, tl_x, tl_y, trns_norm_val,
+                                                      is_flipped)
+
         # regardless of the transforms the tracks should be normalized to [-1,1] for the dsnt layer
+        left_hand_mask, right_hand_mask = None, None
         if use_hands:
             left_track = make_dsnt_track(left_track, norm_val)
             right_track = make_dsnt_track(right_track, norm_val)
@@ -376,33 +405,8 @@ class MultitaskDatasetLoader(torchDataset):
             gaze_mask = gaze_mask & mask_coord_bounds(gaze_track)
 
         if self.vis_data:
-            # for i in range(len(sampled_frames)):
-            #     cv2.imshow('orig_img', sampled_frames[i])
-            #     cv2.imshow('transform', clip_input[:, i, :, :].numpy().transpose(1, 2, 0))
-            #     cv2.waitKey(0)
-            if use_hands:
-                orig_left = np.array(hand_tracks['left'], dtype=np.float32)
-                orig_left = orig_left[sampled_idxs]
-                orig_right = np.array(hand_tracks['right'], dtype=np.float32)
-                orig_right = orig_right[sampled_idxs]
-
-                for i in range(len(sampled_frames)):
-                    vis_with_circle(sampled_frames[i], orig_left[i], orig_right[i], 'hands no aug')
-                    vis_with_circle(clip_input[:, i, :, :].numpy().transpose(1, 2, 0), left_track_vis[i],
-                                    right_track_vis[i], 'hands transformed')
-                    vis_with_circle(clip_input[:, i, :, :].numpy().transpose(1, 2, 0), orig_left[i], orig_right[i],
-                                    'hands trans. img not coords')
-                    cv2.waitKey(0)
-            if use_gaze:
-                orig_gaze = np.array([[value[0], value[1]] for key, value in gaze_data.items()],
-                                     dtype=np.float32)[sampled_idxs]
-                for i in range(len(sampled_frames)):
-                    vis_with_circle_gaze(sampled_frames[i], orig_gaze[i]*[or_w, or_h], 'gaze no aug')
-                    vis_with_circle_gaze(clip_input[:, i, :, :].numpy().transpose(1, 2, 0), gaze_track_vis[i],
-                                         'gaze transformed')
-                    vis_with_circle_gaze(clip_input[:, i, :, :].numpy().transpose(1, 2, 0), orig_gaze[i]*norm_val[:2],
-                                         'gaze trans. img not coords')
-                    cv2.waitKey(0)
+            visualize_item(sampled_frames, clip_input, sampled_idxs, use_hands, hand_tracks, left_track_vis,
+                           right_track_vis, use_gaze, gaze_data, gaze_track_vis, or_w, or_h, norm_val)
 
         # get the classification task labels
         labels = list()
@@ -431,6 +435,9 @@ class MultitaskDatasetLoader(torchDataset):
             hand_points = hand_points.flatten()
             labels = np.concatenate((labels, hand_points))
             masks = np.concatenate((masks, left_hand_mask, right_hand_mask)).astype(np.bool)
+        if use_objects:
+            bpv = bpv.flatten()
+            labels = np.concatenate((labels, bpv))
 
         # this is for the dataloader only, to avoid having uneven sizes in the label/mask dimension of the batch
         if len(labels) < self.maximum_target_size:
@@ -444,6 +451,37 @@ class MultitaskDatasetLoader(torchDataset):
             return clip_input, labels, dataset_id, orig_gaze, validation_id
         else:
             return clip_input, labels, masks, dataset_id
+
+
+def visualize_item(sampled_frames, clip_input, sampled_idxs, use_hands, hand_tracks, left_track_vis, right_track_vis,
+                   use_gaze, gaze_data, gaze_track_vis, or_w, or_h, norm_val):
+    # for i in range(len(sampled_frames)):
+        #     cv2.imshow('orig_img', sampled_frames[i])
+        #     cv2.imshow('transform', clip_input[:, i, :, :].numpy().transpose(1, 2, 0))
+        #     cv2.waitKey(0)
+        if use_hands:
+            orig_left = np.array(hand_tracks['left'], dtype=np.float32)
+            orig_left = orig_left[sampled_idxs]
+            orig_right = np.array(hand_tracks['right'], dtype=np.float32)
+            orig_right = orig_right[sampled_idxs]
+
+            for i in range(len(sampled_frames)):
+                vis_with_circle(sampled_frames[i], orig_left[i], orig_right[i], 'hands no aug')
+                vis_with_circle(clip_input[:, i, :, :].numpy().transpose(1, 2, 0), left_track_vis[i],
+                                right_track_vis[i], 'hands transformed')
+                vis_with_circle(clip_input[:, i, :, :].numpy().transpose(1, 2, 0), orig_left[i], orig_right[i],
+                                'hands trans. img not coords')
+                cv2.waitKey(0)
+        if use_gaze:
+            orig_gaze = np.array([[value[0], value[1]] for key, value in gaze_data.items()],
+                                 dtype=np.float32)[sampled_idxs]
+            for i in range(len(sampled_frames)):
+                vis_with_circle_gaze(sampled_frames[i], orig_gaze[i]*[or_w, or_h], 'gaze no aug')
+                vis_with_circle_gaze(clip_input[:, i, :, :].numpy().transpose(1, 2, 0), gaze_track_vis[i],
+                                     'gaze transformed')
+                vis_with_circle_gaze(clip_input[:, i, :, :].numpy().transpose(1, 2, 0), orig_gaze[i]*norm_val[:2],
+                                     'gaze trans. img not coords')
+                cv2.waitKey(0)
 
 
 if __name__ == '__main__':
@@ -505,14 +543,16 @@ if __name__ == '__main__':
     #                                 batch_transform=train_transforms, gaze_list_prefix=_glp, hand_list_prefix=_hlp,
     #                                 validation=True, eval_gaze=False, vis_data=True)
     # 4 test dataloader for gtea + epic
-    tasks_str = "A106V19N53GH+A2513V125N352H"
-    tpd = parse_tasks_str(tasks_str)
+    tasks_str = "A106V19N53GH+A2513V125N352HO352"
+    tpd = parse_tasks_str(tasks_str, ['egtea', 'epick'])
     video_list_file = [r"other\splits\EGTEA\fake_split1.txt", r"other\splits\EPIC_KITCHENS\epic_rgb_new_nd_val_act\epic_rgb_new_val_1_fake.txt"]
     _hlp = ['hand_detection_tracks_lr005', 'hand_detection_tracks_lr005']
     _glp = ['gaze_tracks']
+    _olp = ['noun_bpv_oh']
     loader = MultitaskDatasetLoader(test_sampler, video_list_file, ['egtea', 'epick'], tasks_per_dataset=tpd,
                                     batch_transform=train_transforms, gaze_list_prefix=_glp, hand_list_prefix=_hlp,
-                                    validation=True, eval_gaze=False, vis_data=True)
+                                    object_list_prefix=_olp,
+                                    validation=True, eval_gaze=False, vis_data=False)
 
     for ind in range(len(loader)):
         _clip_input, _labels, _dataset_id, _validation_id = loader.__getitem__(ind)

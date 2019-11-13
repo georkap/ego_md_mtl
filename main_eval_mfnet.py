@@ -53,8 +53,7 @@ def main():
         tasks_per_dataset = eval_tasks_per_dataset
         args.dataset = [args.eval_dataset]
 
-
-    objectives_text, num_objectives, num_classes, num_coords = parse_tasks_per_dataset(tasks_per_dataset)
+    objectives_text, num_objectives, num_classes, num_coords, num_objects = parse_tasks_per_dataset(tasks_per_dataset)
 
     output_dir = os.path.dirname(args.ckpt_path)
     log_file = make_log_file_name(output_dir, args)
@@ -66,6 +65,7 @@ def main():
 
     kwargs = dict()
     kwargs['num_coords'] = num_coords
+    kwargs["num_objects"] = num_objects
     if args.long:
         kwargs["k_sec"] = {2: 3, 3: 4, 4: 11, 5: 3}
     model_ft = mfnet_3d(num_classes, **kwargs)
@@ -102,7 +102,9 @@ def main():
 
         val_loader = MultitaskDatasetLoader(val_sampler, args.val_lists, args.dataset, tasks_per_dataset,
                                             batch_transform=val_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
-                                            hand_list_prefix=args.hand_list_prefix[:], validation=True)
+                                            hand_list_prefix=args.hand_list_prefix[:],
+                                            object_list_prefix=args.object_list_prefix[:],
+                                            validation=True)
         val_iter = torch.utils.data.DataLoader(val_loader, batch_size=args.batch_size, shuffle=False,
                                                num_workers=args.num_workers, pin_memory=True)
 

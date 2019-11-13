@@ -1,11 +1,12 @@
 import torch
 import torch.nn.functional as F
 from src.losses.coord_loss import gaze_loss, hand_loss
+from src.losses.object_loss import object_loss
 from src.losses.min_norm_solvers import MinNormSolver, gradient_normalizers
 
 
-def get_mtl_losses(targets, masks, outputs, coords, heatmaps, probabilities, num_outputs, criterion):
-    num_cls_outputs, num_g_outputs, num_h_outputs = num_outputs
+def get_mtl_losses(targets, masks, outputs, coords, heatmaps, probabilities, objects, num_outputs, criterion):
+    num_cls_outputs, num_g_outputs, num_h_outputs, num_o_outputs = num_outputs
     targets_starting_point = num_cls_outputs
     masks_starting_point = 0
     slice_from = 0
@@ -37,7 +38,13 @@ def get_mtl_losses(targets, masks, outputs, coords, heatmaps, probabilities, num
         slice_from += 2
         loss = loss + hand_coord_loss
         hand_coord_losses.append(hand_coord_loss)
-    return loss, cls_losses, gaze_coord_losses, hand_coord_losses
+    object_losses = []
+    if num_o_outputs > 0:
+        object_vector_loss = object_loss(targets,  objects, targets_start_from=targets_starting_point)
+        targets_starting_point += 352
+        loss = loss + object_vector_loss
+        object_losses.append(object_vector_loss)
+    return loss, cls_losses, gaze_coord_losses, hand_coord_losses, object_losses
 
 def _get_mtl_losses(targets, dataset_ids, outputs, coords, heatmaps, num_outputs, tasks_per_dataset, criterion):
     num_cls_outputs, num_g_outputs, num_h_outputs = num_outputs

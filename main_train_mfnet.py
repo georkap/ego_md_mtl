@@ -28,7 +28,7 @@ from src.constants import *
 def main():
     args, model_name = parse_args('mfnet', val=False)
     tasks_per_dataset = parse_tasks_str(args.tasks, args.dataset)
-    objectives_text, num_objectives, num_classes, num_coords = parse_tasks_per_dataset(tasks_per_dataset)
+    objectives_text, num_objectives, num_classes, num_coords, num_objects = parse_tasks_per_dataset(tasks_per_dataset)
     output_dir, log_file = init_folders(args.base_output_dir, model_name, args.resume, args.logging)
     print_and_save(args, log_file)
     print_and_save("Model name: {}".format(model_name), log_file)
@@ -39,6 +39,7 @@ def main():
     mfnet_3d = MFNET_3D_MO  # mfnet 3d multi output
     kwargs = dict()
     kwargs["num_coords"] = num_coords
+    kwargs["num_objects"] = num_objects
     if args.long:
         kwargs["k_sec"] = {2: 3, 3: 4, 4: 11, 5: 3}
     model_ft = mfnet_3d(num_classes, dropout=args.dropout, **kwargs)
@@ -91,7 +92,8 @@ def main():
         RandomHorizontalFlip(), RandomHLS(vars=[15, 35, 25]), ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
     train_loader = MultitaskDatasetLoader(train_sampler, args.train_lists, args.dataset, tasks_per_dataset,
                                           batch_transform=train_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
-                                          hand_list_prefix=args.hand_list_prefix[:])
+                                          hand_list_prefix=args.hand_list_prefix[:],
+                                          object_list_prefix=args.object_list_prefix[:])
     train_iterator = torch.utils.data.DataLoader(train_loader, batch_size=args.batch_size, shuffle=True,
                                                  num_workers=args.num_workers, pin_memory=True)
 
@@ -100,7 +102,8 @@ def main():
                                           Normalize(mean=mean_3d, std=std_3d)])
     test_loader = MultitaskDatasetLoader(test_sampler, args.test_lists, args.dataset, tasks_per_dataset,
                                          batch_transform=test_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
-                                         hand_list_prefix=args.hand_list_prefix[:])
+                                         hand_list_prefix=args.hand_list_prefix[:],
+                                         object_list_prefix=args.object_list_prefix[:])
     test_iterator = torch.utils.data.DataLoader(test_loader, batch_size=args.batch_size, shuffle=False,
                                                 num_workers=args.num_workers, pin_memory=True)
 
