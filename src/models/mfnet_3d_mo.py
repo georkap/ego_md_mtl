@@ -198,7 +198,9 @@ class MFNET_3D(nn.Module):
 
             h_out = self.classifier_list(h)
 
-            objects = self.object_classifier(h)
+            objects = None
+            if self.num_objects > 0:
+                objects = self.object_classifier(h)
 
             return h_out, coords, heatmaps, probabilities, objects
         elif upto == 'shared':

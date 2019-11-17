@@ -180,7 +180,8 @@ class MFNET_3D_SF(nn.Module):
 
         h_out = self.classifier_list(x)
 
-        return h_out
+        coords, heatmaps, probabilities, objects = None, None, None, None
+        return h_out, coords, heatmaps, probabilities, objects
 
 
 if __name__ == "__main__":
