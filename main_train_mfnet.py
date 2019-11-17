@@ -15,6 +15,7 @@ import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 
 from src.models.mfnet_3d_mo import MFNET_3D as MFNET_3D_MO
+from src.models.mfnet_3d_slowfast import MFNET_3D_SF as MFNET_3D_SF
 from src.utils.argparse_utils import parse_args, parse_tasks_str, parse_tasks_per_dataset
 from src.utils.file_utils import print_and_save, save_mt_checkpoints, init_folders, resume_checkpoint
 from src.utils.dataset_loader import MultitaskDatasetLoader, prepare_sampler
@@ -36,7 +37,7 @@ def main():
     print_and_save(objectives_text, log_file)
     cudnn.benchmark = True
 
-    mfnet_3d = MFNET_3D_MO  # mfnet 3d multi output
+    mfnet_3d = MFNET_3D_SF if args.sf else MFNET_3D_MO  # mfnet 3d multi output
     kwargs = dict()
     kwargs["num_coords"] = num_coords
     kwargs["num_objects"] = num_objects

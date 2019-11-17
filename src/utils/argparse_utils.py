@@ -46,6 +46,7 @@ def parse_args_network(parser, net_type):
     # Network configuration
     if net_type in ['mfnet']:
         parser.add_argument('--long', default=False, action='store_true')
+        parser.add_argument('--sf', default=False, action='store_true')
         parser.add_argument('--pretrained', default=False, action='store_true')
         parser.add_argument('--pretrained_model_path', type=str, default=r"data\pretrained_models\MFNet3D_Kinetics-400_72.8.pth")
         parser.add_argument('--tasks', type=str, default='A106',
@@ -151,6 +152,8 @@ def make_model_name(args, net_type):
         model_name = model_name + "_moo"
     if args.long:
         model_name = model_name + "_long"
+    if args.sf:
+        model_name = model_name + "_sf"
 
     model_name = model_name + args.append_to_model_name
     
