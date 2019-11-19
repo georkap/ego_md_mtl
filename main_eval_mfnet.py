@@ -30,6 +30,7 @@ from torch.utils.data import DataLoader
 from torch.nn import DataParallel
 
 from src.models.mfnet_3d_mo import MFNET_3D as MFNET_3D_MO
+from src.models.mfnet_3d_slowfast import MFNET_3D_SF as MFNET_3D_SF
 from src.utils.argparse_utils import parse_args, make_log_file_name, parse_tasks_str, parse_tasks_per_dataset, compare_tasks_per_dataset
 from src.utils.file_utils import print_and_save
 from src.utils.dataset_loader import MultitaskDatasetLoader
@@ -60,7 +61,7 @@ def main():
     print_and_save(args, log_file)
     cudnn.benchmark = True
 
-    mfnet_3d = MFNET_3D_MO
+    mfnet_3d = MFNET_3D_SF if args.sf else MFNET_3D_MO  # mfnet 3d multi output
     validate = validate_mfnet_mo
 
     kwargs = dict()

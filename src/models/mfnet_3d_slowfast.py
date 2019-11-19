@@ -166,6 +166,7 @@ class MFNET_3D_SF(nn.Module):
             x_s = slow_block(x_s)
             x_f = fast_block(x_f)
             x_s, x_f = fuse([x_s, x_f])
+            # print("forwarded block {}".format(block_id))
 
         x_s = self.tail_slow(x_s)
         x_f = self.tail_fast(x_f)
@@ -188,13 +189,16 @@ if __name__ == "__main__":
     import torch
     # ---------
     kwargs = {'num_coords': 3}
-    net = MFNET_3D_SF(num_classes=[2, 3], dropout=0.5, **kwargs)
+    net = MFNET_3D_SF(num_classes=[3], dropout=0.5, **kwargs)
     # net = net.cuda()
     # data = [torch.randn(1, 3, 4, 224, 224, requires_grad=True),
     #         torch.randn(1, 1, 24, 224, 224, requires_grad=True)]
     # output = net(data[0], data[1])
     data = torch.randn(1, 3, 24, 224, 224, requires_grad=True)
     output = net(data)
+    # loss = torch.nn.CrossEntropyLoss()(output[0][0],torch.tensor([0]).long())
+    # print(loss)
+    # loss.backward()
     # h, htail = net.forward_shared_block(data)
     # coords, heatmaps, probabilities = net.forward_coord_layers(htail)
     # output = net.forward_cls_layers(h)
