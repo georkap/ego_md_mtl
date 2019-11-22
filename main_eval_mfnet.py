@@ -61,7 +61,12 @@ def main():
     print_and_save(args, log_file)
     cudnn.benchmark = True
 
-    mfnet_3d = MFNET_3D_SF if args.sf else MFNET_3D_MO  # mfnet 3d multi output
+    if args.sf:
+        mfnet_3d = MFNET_3D_SF
+    elif args.flow:
+        mfnet_3d = MFNET_3D_MO_D
+    else:
+        mfnet_3d = MFNET_3D_MO
     validate = validate_mfnet_mo
 
     kwargs = dict()

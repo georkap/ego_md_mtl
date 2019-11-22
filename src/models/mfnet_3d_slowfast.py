@@ -10,10 +10,10 @@ class MF_UNIT_SF(nn.Module):
         num_ix = int(num_mid/4)
         temporal_pad = 1 if temporal_kernel == 3 else 0
         # prepare input
-        self.conv_i1 = BN_AC_CONV3D(num_in=num_in,  num_filter=num_ix,  kernel=(1, 1, 1), pad=(0, 0, 0))
-        self.conv_i2 = BN_AC_CONV3D(num_in=num_ix,  num_filter=num_in,  kernel=(1, 1, 1), pad=(0, 0, 0))
+        self.conv_i1 = BN_AC_CONV3D(num_in=num_in, num_filter=num_ix,  kernel=(1, 1, 1), pad=(0, 0, 0))
+        self.conv_i2 = BN_AC_CONV3D(num_in=num_ix, num_filter=num_in,  kernel=(1, 1, 1), pad=(0, 0, 0))
         # main part
-        self.conv_m1 = BN_AC_CONV3D(num_in=num_in,  num_filter=num_mid, kernel=(temporal_kernel, 3, 3),
+        self.conv_m1 = BN_AC_CONV3D(num_in=num_in, num_filter=num_mid, kernel=(temporal_kernel, 3, 3),
                                     pad=(temporal_pad, 1, 1), stride=stride, g=g)
         if first_block:
             self.conv_m2 = BN_AC_CONV3D(num_in=num_mid, num_filter=num_out, kernel=(1, 1, 1), pad=(0, 0, 0))
@@ -26,7 +26,7 @@ class MF_UNIT_SF(nn.Module):
 
     def forward(self, x):
         h = self.conv_i1(x)
-        x_in = x + self.conv_i2(h)
+        x_in = x + self.conv_i2(h)[:,:]
 
         h = self.conv_m1(x_in)
         h = self.conv_m2(h)
@@ -87,8 +87,8 @@ class MFNET_3D_SF(nn.Module):
         k_sec = kwargs.get('k_sec', {2: 3, 3: 4, 4: 6, 5: 3})
         num_mid = [96, 192, 384, 768]
         conv_num_out_slow = [16, 96, 192, 384, 768]
-        conv_num_out_fast = [3, 16, 32, 64, 128]
-        fusion_conv_channel_ratio = 2
+        conv_num_out_fast = [4, 16, 32, 64, 128]
+        fusion_conv_channel_ratio = 4
         # for fast out channels are conv_num_out/b (=6) [2.67, 16, 32, 64, 128]->[3,16,32,64,128]
 
         # Slow intro conv
@@ -116,15 +116,15 @@ class MFNET_3D_SF(nn.Module):
                  MF_UNIT_SF(num_in=conv_num_out_slow[block_id]+fusion_conv_channel_ratio*conv_num_out_fast[block_id] if i == 1 else conv_num_out_slow[block_id+1],
                             num_mid=num_mid[block_id], num_out=conv_num_out_slow[block_id+1],
                             stride=(1, 2, 2) if i == 1 and block_id != 0 else (1, 1, 1),
-                            g=1 if i == 1 else groups, first_block=(i == 1), temporal_kernel=slow_temporal_kernel))
-                for i in range(1, k_sec[2]+1)]))
+                            g=groups, first_block=(i == 1), temporal_kernel=slow_temporal_kernel))
+                for i in range(1, value+1)]))
             block_fast = nn.Sequential(OrderedDict([
                 ("B%02d" % i,
                  MF_UNIT_SF(num_in=conv_num_out_fast[block_id] if i == 1 else conv_num_out_fast[block_id + 1],
                             num_mid=num_mid[block_id]//self.sf_b, num_out=conv_num_out_fast[block_id + 1],
                             stride=(1, 2, 2) if i == 1 and block_id != 0 else (1, 1, 1),
                             g=1 if block_id == 0 else groups, first_block=(i == 1), temporal_kernel=3))
-                for i in range(1, k_sec[2]+1)]))
+                for i in range(1, value+1)]))
 
             fuse = FuseFastToSlow(conv_num_out_fast[block_id+1], fusion_conv_channel_ratio=fusion_conv_channel_ratio,
                                   fusion_kernel=5, alpha=self.sf_a)
@@ -190,12 +190,14 @@ if __name__ == "__main__":
     # ---------
     kwargs = {'num_coords': 3}
     net = MFNET_3D_SF(num_classes=[3], dropout=0.5, **kwargs)
-    # net = net.cuda()
+    net = net.cuda()
     # data = [torch.randn(1, 3, 4, 224, 224, requires_grad=True),
     #         torch.randn(1, 1, 24, 224, 224, requires_grad=True)]
     # output = net(data[0], data[1])
-    data = torch.randn(1, 3, 24, 224, 224, requires_grad=True)
+
+    data = torch.randn(1, 3, 24, 224, 224, requires_grad=True).cuda()
     output = net(data)
+
     # loss = torch.nn.CrossEntropyLoss()(output[0][0],torch.tensor([0]).long())
     # print(loss)
     # loss.backward()
@@ -203,4 +205,5 @@ if __name__ == "__main__":
     # coords, heatmaps, probabilities = net.forward_coord_layers(htail)
     # output = net.forward_cls_layers(h)
 #    torch.save({'state_dict': net.state_dict()}, './tmp.pth')
-    print(len(output))
+
+#     print(len(output))

@@ -243,12 +243,12 @@ class MFNET_3D(nn.Module):
 if __name__ == "__main__":
     import torch
     # ---------
-    kwargs = {'num_coords': 3}
-    net = MFNET_3D(num_classes=[2, 3], pretrained=False, **kwargs)
-    data = torch.randn(1, 3, 16, 224, 224, requires_grad=True)
-    output = net(data)
-    h, htail = net.forward_shared_block(data)
-    coords, heatmaps, probabilities = net.forward_coord_layers(htail)
-    output = net.forward_cls_layers(h)
-#    torch.save({'state_dict': net.state_dict()}, './tmp.pth')
-    print(len(output))
+    kwargs = {'num_coords': 0}
+    net = MFNET_3D(num_classes=[5], pretrained=False, **kwargs)
+    # data = torch.randn(1, 3, 16, 224, 224, requires_grad=True)
+    # output = net(data)
+    # h, htail = net.forward_shared_block(data)
+    # coords, heatmaps, probabilities = net.forward_coord_layers(htail)
+    # output = net.forward_cls_layers(h)
+   # torch.save({'state_dict': net.state_dict()}, './tmp.pth')
+    # print(len(output))

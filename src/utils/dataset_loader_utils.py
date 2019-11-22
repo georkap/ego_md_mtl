@@ -46,6 +46,20 @@ class RandomHorizontalFlip(object):
     def is_flipped(self):
         return self.flipped
 
+class PredefinedHorizontalFlip(object):
+    """ Class used for flipping images based on a predefined flipping desicion from another modality"""
+    def __init__(self):
+        self.flip = False
+
+    def __call__(self, data):
+        if self.flip:
+            data = np.fliplr(data)
+            data = np.ascontiguousarray(data)
+        return data
+
+    def set_flip(self, flip):
+        self.flip = flip
+
 class To01Range(object):
     def __init__(self, binarize):
         self.binarize = binarize

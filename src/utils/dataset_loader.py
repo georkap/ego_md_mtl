@@ -61,6 +61,15 @@ def load_images(data_path, frame_indices, image_tmpl):
         # images[i] = next_image
     return images
 
+def load_flow_images(data_path, frame_indices, image_tmpl):
+    flow = [] # the will go uvuv...
+    for f_ind in frame_indices:
+        u_name = os.path.join(data_path, 'u', image_tmpl.format(f_ind))
+        v_name = os.path.join(data_path, 'v', image_tmpl.format(f_ind))
+        _u = cv2.imread(u_name, cv2.IMREAD_GRAYSCALE)
+        _v = cv2.imread(v_name, cv2.IMREAD_GRAYSCALE)
+        flow.append(np.concatenate((_u[:,:,np.newaxis], _v[:,:,np.newaxis]), axis=2))
+    return flow
 
 def prepare_sampler(sampler_type, clip_length, frame_interval):
     if sampler_type == "train":
@@ -155,7 +164,7 @@ def parse_samples_list(list_file, datatype):
 
 class DatasetInfo(object):
     def __init__(self, dataset_id, dataset_name, data_line, img_tmpl, norm_val, tasks_for_dataset, cls_tasks,
-                 max_num_classes, gaze_list_prefix, hand_list_prefix, object_list_prefix, video_list):
+                 max_num_classes, gaze_list_prefix, hand_list_prefix, object_list_prefix, video_list, sub_with_flow):
         self.dataset_id = dataset_id
         self.dataset_name = dataset_name
         self.data_line = data_line
@@ -167,6 +176,7 @@ class DatasetInfo(object):
         self.td = tasks_for_dataset
         self.cls_tasks = cls_tasks
         self.max_num_classes = max_num_classes
+        self.sub_with_flow = sub_with_flow
 
         self.num_classes = list()
         self.mappings = list()
@@ -194,15 +204,6 @@ def make_dsnt_track(track, norm_val):
     track = (track * 2 + 1) / norm_val[:2] - 1
     return track
 
-def vis_with_circle(img, left_point, right_point, winname):
-    k = cv2.circle(img.copy(), (int(left_point[0]), int(left_point[1])), 10, (255, 0, 0), 4)
-    k = cv2.circle(k, (int(right_point[0]), int(right_point[1])), 10, (0, 0, 255), 4)
-    cv2.imshow(winname, k)
-
-def vis_with_circle_gaze(img, gaze_point, winname):
-    k = cv2.circle(img.copy(), (int(gaze_point[0]), int(gaze_point[1])), 10, (0, 255, 0), 4)  # green is gaze
-    cv2.imshow(winname, k)
-
 def mask_coord_bounds(track):
     mask_lower = track >= [-1, -1]
     mask_lower = mask_lower[:, 0] & mask_lower[:, 1]
@@ -221,7 +222,7 @@ def object_list_to_bpv(detections, num_noun_classes):
 class MultitaskDatasetLoader(torchDataset):
     def __init__(self, sampler, split_files, datasets, tasks_per_dataset, batch_transform,
                  gaze_list_prefix, hand_list_prefix, object_list_prefix,
-                 validation=False, eval_gaze=False, vis_data=False):
+                 validation=False, eval_gaze=False, vis_data=False, use_flow=False, flow_transforms=None):
         self.sampler = sampler
         assert len(datasets) == len(tasks_per_dataset) # 1-1 association between dataset name, split file and resp tasks
         self.video_list = list()
@@ -238,6 +239,7 @@ class MultitaskDatasetLoader(torchDataset):
                 video_list = parse_samples_list(split_file, data_line)
                 cls_tasks = EPIC_CLS_TASKS
                 max_num_classes = LABELS_EPIC
+                sub_with_flow = 'rgb\\'
             elif dataset_name == 'egtea':
                 data_line = GTEADataLine
                 img_tmpl = 'img_{:05d}.jpg'
@@ -245,16 +247,19 @@ class MultitaskDatasetLoader(torchDataset):
                 video_list = parse_samples_list(split_file, data_line)
                 cls_tasks = GTEA_CLS_TASKS
                 max_num_classes = LABELS_GTEA
+                sub_with_flow = 'cropped_clips_frames\\'
             else:
                 # undeveloped dataset yet e.g. something something or whatever
                 pass
             dat_info = DatasetInfo(i, dataset_name, data_line, img_tmpl, norm_val, td, cls_tasks, max_num_classes, glp,
-                                   hlp, olp, video_list)
+                                   hlp, olp, video_list, sub_with_flow)
             self.maximum_target_size = td['max_target_size'] if td['max_target_size'] > self.maximum_target_size else self.maximum_target_size
             self.dataset_infos[dataset_name] = dat_info
             self.video_list += video_list
 
+        self.use_flow = use_flow
         self.transform = batch_transform
+        self.flow_transforms = flow_transforms
         self.validation = validation
         self.eval_gaze = eval_gaze
         self.vis_data = vis_data
@@ -264,8 +269,10 @@ class MultitaskDatasetLoader(torchDataset):
 
     def get_scale_and_shift(self, orig_width, orig_height):
         is_flipped = False
+        is_training = False
         if 'RandomScale' in self.transform.transforms[0].__repr__():
             # means we are in training so get the transformations
+            is_training = True
             sc_w, sc_h = self.transform.transforms[0].get_new_size()
             tl_y, tl_x = self.transform.transforms[1].get_tl()
             if 'RandomHorizontalFlip' in self.transform.transforms[2].__repr__():
@@ -278,7 +285,7 @@ class MultitaskDatasetLoader(torchDataset):
             sc_h = orig_height
             tl_x = 0
             tl_y = 0
-        return sc_w / orig_width, sc_h / orig_height, tl_x, tl_y, is_flipped
+        return sc_w / orig_width, sc_h / orig_height, tl_x, tl_y, is_flipped, is_training
 
     def __getitem__(self, index):
         data_line = self.video_list[index]
@@ -332,9 +339,18 @@ class MultitaskDatasetLoader(torchDataset):
         img_tmpl = self.dataset_infos[dataset_name].img_tmpl
         sampled_idxs = self.sampler.sampling(range_max=frame_count, v_id=index, start_frame=start_frame)
         sampled_frames = load_images(path, sampled_idxs, img_tmpl)
+        clip_input = np.concatenate(sampled_frames, axis=2)
+
+        sampled_flow, clip_flow = None, None
+        if self.use_flow:
+            sub_with_flow = self.dataset_infos[dataset_name].sub_with_flow
+            flow_path = path.replace(sub_with_flow, 'flow\\')
+            # for each flow channel load half the images of the rgb channel
+            sampled_flow = load_flow_images(flow_path, (np.array(sampled_idxs)//2)[::2], img_tmpl)
+            clip_flow = np.concatenate(sampled_flow, axis=2)
+
         sampled_idxs = (np.array(sampled_idxs) - start_frame).astype(np.int)
 
-        clip_input = np.concatenate(sampled_frames, axis=2)
         or_h, or_w, _ = clip_input.shape
 
         # hands points is the final output, hand tracks is pickle, left and right track are intermediate versions
@@ -366,8 +382,8 @@ class MultitaskDatasetLoader(torchDataset):
             # transform the frames
             clip_input = self.transform(clip_input)
             # apply transforms to tracks
-            if use_hands or use_gaze:
-                scale_x, scale_y, tl_x, tl_y, is_flipped = self.get_scale_and_shift(or_w, or_h)
+            if use_hands or use_gaze or self.use_flow:
+                scale_x, scale_y, tl_x, tl_y, is_flipped, is_training = self.get_scale_and_shift(or_w, or_h)
                 _, _, max_h, max_w = clip_input.shape
                 trns_norm_val = [max_w, max_h, max_w, max_h]
                 if use_hands:
@@ -378,6 +394,11 @@ class MultitaskDatasetLoader(torchDataset):
                 if use_gaze:
                     gaze_track = apply_transform_to_track(gaze_track, scale_x, scale_y, tl_x, tl_y, trns_norm_val,
                                                           is_flipped)
+                if self.use_flow:
+                    if is_training:
+                        self.flow_transforms.transforms[2].set_flip(is_flipped)
+                    clip_flow = self.flow_transforms(clip_flow)
+
         norm_val = trns_norm_val if self.transform is not None else orig_norm_val
         if use_hands:
             if self.vis_data:
@@ -406,7 +427,8 @@ class MultitaskDatasetLoader(torchDataset):
 
         if self.vis_data:
             visualize_item(sampled_frames, clip_input, sampled_idxs, use_hands, hand_tracks, left_track_vis,
-                           right_track_vis, use_gaze, gaze_data, gaze_track_vis, or_w, or_h, norm_val)
+                           right_track_vis, use_gaze, gaze_data, gaze_track_vis, or_w, or_h, norm_val,
+                           self.use_flow, sampled_flow, clip_flow)
 
         # get the classification task labels
         labels = list()
@@ -444,17 +466,29 @@ class MultitaskDatasetLoader(torchDataset):
             labels = np.concatenate((labels, [0.0]*(self.maximum_target_size-len(labels)))).astype(np.float32)
         if len(masks) < self.maximum_target_size:
             masks = np.concatenate((masks, [False]*(self.maximum_target_size-len(masks)))).astype(np.float32)
+
+        to_return = None
         if self.validation:
-            return clip_input, labels, masks, validation_id
+            to_return = (clip_input, clip_flow, labels, masks, validation_id) if self.use_flow else (clip_input, labels, masks, validation_id)
         elif self.eval_gaze and use_gaze:
             orig_gaze = np.array([[value[0], value[1]] for key, value in gaze_data.items()], dtype=np.float32).flatten()
-            return clip_input, labels, dataset_id, orig_gaze, validation_id
+            to_return = (clip_input, clip_flow, labels, dataset_id, orig_gaze, validation_id) if self.use_flow else (clip_input, labels, dataset_id, orig_gaze, validation_id)
         else:
-            return clip_input, labels, masks, dataset_id
+            to_return = (clip_input, clip_flow, labels, masks, dataset_id) if self.use_flow else (clip_input, labels, masks, dataset_id)
 
+        return to_return
+
+def vis_with_circle(img, left_point, right_point, winname):
+    k = cv2.circle(img.copy(), (int(left_point[0]), int(left_point[1])), 10, (255, 0, 0), 4)
+    k = cv2.circle(k, (int(right_point[0]), int(right_point[1])), 10, (0, 0, 255), 4)
+    cv2.imshow(winname, k)
+
+def vis_with_circle_gaze(img, gaze_point, winname):
+    k = cv2.circle(img.copy(), (int(gaze_point[0]), int(gaze_point[1])), 10, (0, 255, 0), 4)  # green is gaze
+    cv2.imshow(winname, k)
 
 def visualize_item(sampled_frames, clip_input, sampled_idxs, use_hands, hand_tracks, left_track_vis, right_track_vis,
-                   use_gaze, gaze_data, gaze_track_vis, or_w, or_h, norm_val):
+                   use_gaze, gaze_data, gaze_track_vis, or_w, or_h, norm_val, use_flow, sampled_flow, clip_flow):
     # for i in range(len(sampled_frames)):
         #     cv2.imshow('orig_img', sampled_frames[i])
         #     cv2.imshow('transform', clip_input[:, i, :, :].numpy().transpose(1, 2, 0))
@@ -482,6 +516,13 @@ def visualize_item(sampled_frames, clip_input, sampled_idxs, use_hands, hand_tra
                 vis_with_circle_gaze(clip_input[:, i, :, :].numpy().transpose(1, 2, 0), orig_gaze[i]*norm_val[:2],
                                      'gaze trans. img not coords')
                 cv2.waitKey(0)
+        if use_flow:
+            for i in range(len(sampled_flow)):
+                cv2.imshow('u', sampled_flow[i][:,:,0])
+                cv2.imshow('u_t', clip_flow[0, i, :, :].numpy())
+                cv2.imshow('v', sampled_flow[i][:,:,1])
+                cv2.imshow('v_t', clip_flow[1, i, :, :].numpy())
+                cv2.waitKey(0)
 
 
 if __name__ == '__main__':
@@ -495,9 +536,11 @@ if __name__ == '__main__':
 
     import torchvision.transforms as transforms
     from src.utils.dataset_loader_utils import RandomScale, RandomCrop, RandomHorizontalFlip, RandomHLS, ToTensorVid, \
-        Normalize, Resize, CenterCrop
+        Normalize, Resize, CenterCrop, PredefinedHorizontalFlip
     mean_3d = [124 / 255, 117 / 255, 104 / 255]
     std_3d = [0.229, 0.224, 0.225]
+    mean_1d = [0.5]
+    std_1d = [0.226]
 
     from src.utils.argparse_utils import parse_tasks_str
 
@@ -506,6 +549,11 @@ if __name__ == '__main__':
         RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288], seed=seed),
         RandomCrop((224, 224), seed=seed), RandomHorizontalFlip(seed=seed), RandomHLS(vars=[15, 35, 25]),
         ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
+    train_flow_transforms = transforms.Compose([
+        RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288], seed=seed),
+        RandomCrop((224, 224), seed=seed), PredefinedHorizontalFlip(),
+        ToTensorVid(dim=2), Normalize(mean=mean_1d, std=std_1d)])
+
     test_transforms = transforms.Compose([Resize((256, 256), False), CenterCrop((224, 224)), ToTensorVid(),
                                           Normalize(mean=mean_3d, std=std_3d)])
 
@@ -516,22 +564,20 @@ if __name__ == '__main__':
     #### tests
     # Note: before running tests put working directory as the "main" files
     # 1 test dataloader for epic kitchens
-    # tasks_str = "V125N352" # "A2513N352H" ok # "A2513V125N352H" ok # "V125N351" ok # "V125H" ok # "A2513V125N351H" ok  # "A2513V125N351GH" crashes due to 'G'
-    # tpd = parse_tasks_str(tasks_str)
-    # video_list_file = r"other\splits\EPIC_KITCHENS\epic_rgb_new_nd_val_act\epic_rgb_new_val_1.txt"
-    # _hlp = 'hand_detection_tracks_lr005'
-    # loader = MultitaskDatasetLoader(test_sampler, [video_list_file], ['epick'], tasks_per_dataset=tpd,
-    #                                 batch_transform=train_transforms, gaze_list_prefix=[None], hand_list_prefix=[_hlp],
-    #                                 validation=True, eval_gaze=False, vis_data=True)
+    tasks_str = 'N352HO352' # "V125N352" # "A2513N352H" ok # "A2513V125N352H" ok # "V125N351" ok # "V125H" ok # "A2513V125N351H" ok  # "A2513V125N351GH" crashes due to 'G'
+    datasets = ['epick']
+    tpd = parse_tasks_str(tasks_str, datasets)
+    video_list_file = [r"other\splits\EPIC_KITCHENS\epic_rgb_new_nd_val_act\epic_rgb_new_val_1_fake.txt"]
+    _hlp = ['hand_detection_tracks_lr005_new']
+    _glp = ['gaze_tracks']
+    _olp = ['noun_bpv_oh']
+
     # 2 test dataloader for egtea
     # tasks_str = "A106N53" ok # "N53GH" ok # "A106V19N53GH" ok
     # tpd = parse_tasks_str(tasks_str)
     # video_list_file = r"other\splits\EGTEA\fake_split3.txt"
     # _hlp = 'hand_detection_tracks_lr005'
     # _glp = 'gaze_tracks'
-    # loader = MultitaskDatasetLoader(test_sampler, [video_list_file], ['egtea'], tasks_per_dataset=tpd,
-    #                                 batch_transform=train_transforms, gaze_list_prefix=[_glp], hand_list_prefix=[_hlp],
-    #                                 validation=True, eval_gaze=False, vis_data=True)
 
     # 3 test dataloader for epic + gtea
     # tasks_str = "A2513V125N352H+A106V19N53GH" ok
@@ -539,21 +585,25 @@ if __name__ == '__main__':
     # video_list_file = [r"other\splits\EPIC_KITCHENS\epic_rgb_new_nd_val_act\epic_rgb_new_val_1_fake.txt", r"other\splits\EGTEA\fake_split3.txt"]
     # _hlp = ['hand_detection_tracks_lr005', 'hand_detection_tracks_lr005']
     # _glp = ['gaze_tracks']
-    # loader = MultitaskDatasetLoader(test_sampler, video_list_file, ['epick', 'egtea'], tasks_per_dataset=tpd,
-    #                                 batch_transform=train_transforms, gaze_list_prefix=_glp, hand_list_prefix=_hlp,
-    #                                 validation=True, eval_gaze=False, vis_data=True)
+
     # 4 test dataloader for gtea + epic
-    tasks_str = "A106V19N53GH+A2513V125N352HO352"
-    tpd = parse_tasks_str(tasks_str, ['egtea', 'epick'])
-    video_list_file = [r"other\splits\EGTEA\fake_split1.txt", r"other\splits\EPIC_KITCHENS\epic_rgb_new_nd_val_act\epic_rgb_new_val_1_fake.txt"]
-    _hlp = ['hand_detection_tracks_lr005', 'hand_detection_tracks_lr005']
-    _glp = ['gaze_tracks']
-    _olp = ['noun_bpv_oh']
-    loader = MultitaskDatasetLoader(test_sampler, video_list_file, ['egtea', 'epick'], tasks_per_dataset=tpd,
+    # tasks_str = "A106V19N53GH+A2513V125N352HO352"
+    # tpd = parse_tasks_str(tasks_str, ['egtea', 'epick'])
+    # video_list_file = [r"other\splits\EGTEA\fake_split1.txt", r"other\splits\EPIC_KITCHENS\epic_rgb_new_nd_val_act\epic_rgb_new_val_1_fake.txt"]
+    # _hlp = ['hand_detection_tracks_lr005', 'hand_detection_tracks_lr005']
+    # _glp = ['gaze_tracks']
+    # _olp = ['noun_bpv_oh']
+
+    loader = MultitaskDatasetLoader(test_sampler, video_list_file, datasets, tasks_per_dataset=tpd,
                                     batch_transform=train_transforms, gaze_list_prefix=_glp, hand_list_prefix=_hlp,
                                     object_list_prefix=_olp,
-                                    validation=True, eval_gaze=False, vis_data=False)
+                                    validation=True, eval_gaze=False, vis_data=True, use_flow=True,
+                                    flow_transforms=train_flow_transforms)
 
     for ind in range(len(loader)):
-        _clip_input, _labels, _dataset_id, _validation_id = loader.__getitem__(ind)
+        data_point = loader.__getitem__(ind)
+        if loader.use_flow:
+            _clip_input, _clip_flow, _labels, _dataset_id, _validation_id = data_point
+        else:
+            _clip_input, _labels, _dataset_id, _validation_id = data_point
         print("\rItem {}: {}: {}".format(ind, _validation_id, _labels))

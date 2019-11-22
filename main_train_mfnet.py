@@ -16,11 +16,12 @@ import torchvision.transforms as transforms
 
 from src.models.mfnet_3d_mo import MFNET_3D as MFNET_3D_MO
 from src.models.mfnet_3d_slowfast import MFNET_3D_SF as MFNET_3D_SF
+from src.models.mfnet_3d_mo_mm import MFNET_3D_MO_MM as MFNET_3D_MO_MM
 from src.utils.argparse_utils import parse_args, parse_tasks_str, parse_tasks_per_dataset
 from src.utils.file_utils import print_and_save, save_mt_checkpoints, init_folders, resume_checkpoint
 from src.utils.dataset_loader import MultitaskDatasetLoader, prepare_sampler
 from src.utils.dataset_loader_utils import RandomScale, RandomCrop, RandomHorizontalFlip, RandomHLS, ToTensorVid,\
-    Normalize, Resize, CenterCrop
+    Normalize, Resize, CenterCrop, PredefinedHorizontalFlip
 from src.utils.train_utils import train_mfnet_mo, test_mfnet_mo
 from src.utils.lr_utils import load_lr_scheduler
 from src.constants import *
@@ -37,7 +38,13 @@ def main():
     print_and_save(objectives_text, log_file)
     cudnn.benchmark = True
 
-    mfnet_3d = MFNET_3D_SF if args.sf else MFNET_3D_MO  # mfnet 3d multi output
+    if args.sf:
+        mfnet_3d = MFNET_3D_SF
+    elif args.flow:
+        mfnet_3d = MFNET_3D_MO_MM
+    else:
+        mfnet_3d = MFNET_3D_MO
+
     kwargs = dict()
     kwargs["num_coords"] = num_coords
     kwargs["num_objects"] = num_objects
@@ -91,20 +98,27 @@ def main():
     train_transforms = transforms.Compose([
         RandomScale(make_square=True, aspect_ratio=[0.8, 1./0.8], slen=[224, 288]), RandomCrop((224, 224)),
         RandomHorizontalFlip(), RandomHLS(vars=[15, 35, 25]), ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
+    train_transforms_flow = transforms.Compose([
+        RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288]), RandomCrop((224, 224)),
+        PredefinedHorizontalFlip, ToTensorVid(dim=2), Normalize(mean=mean_1d, std=std_1d)])
     train_loader = MultitaskDatasetLoader(train_sampler, args.train_lists, args.dataset, tasks_per_dataset,
                                           batch_transform=train_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
                                           hand_list_prefix=args.hand_list_prefix[:],
-                                          object_list_prefix=args.object_list_prefix[:])
+                                          object_list_prefix=args.object_list_prefix[:],
+                                          use_flow=args.flow, flow_transforms=train_transforms_flow)
     train_iterator = torch.utils.data.DataLoader(train_loader, batch_size=args.batch_size, shuffle=True,
                                                  num_workers=args.num_workers, pin_memory=True)
 
     test_sampler = prepare_sampler("val", args.clip_length, args.frame_interval)
     test_transforms = transforms.Compose([Resize((256, 256), False), CenterCrop((224, 224)), ToTensorVid(),
                                           Normalize(mean=mean_3d, std=std_3d)])
+    test_transforms_flow = transforms.Compose([Resize((256, 256), False), CenterCrop((224, 224)), ToTensorVid(dim=2),
+                                              Normalize(mean=mean_1d, std=std_1d)])
     test_loader = MultitaskDatasetLoader(test_sampler, args.test_lists, args.dataset, tasks_per_dataset,
                                          batch_transform=test_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
                                          hand_list_prefix=args.hand_list_prefix[:],
-                                         object_list_prefix=args.object_list_prefix[:])
+                                         object_list_prefix=args.object_list_prefix[:],
+                                         use_flow=args.flow, flow_transforms=test_transforms_flow)
     test_iterator = torch.utils.data.DataLoader(test_loader, batch_size=args.batch_size, shuffle=False,
                                                 num_workers=args.num_workers, pin_memory=True)
 
