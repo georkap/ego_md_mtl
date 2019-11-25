@@ -45,7 +45,7 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
 
 
 def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_dataset, cur_epoch, log_file, gpus,
-                   lr_scheduler=None, moo=False, flow=False):
+                   lr_scheduler=None, moo=False, use_flow=False):
     batch_time = AverageMeter()
     full_losses = AverageMeter()
     dataset_metrics = list()
@@ -82,7 +82,7 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
         if isinstance(lr_scheduler, CyclicLR):
             lr_scheduler.step()
 
-        if flow:
+        if use_flow:
             rgb, flow, targets, masks, dataset_ids = data
             rgb = rgb.cuda(gpus[0])
             flow = flow.cuda(gpus[0])
@@ -229,7 +229,7 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
 
     print_and_save("Epoch train time: {}".format(batch_time.sum), log_file)
 
-def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch, dataset, log_file, gpus, flow=False):
+def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch, dataset, log_file, gpus, use_flow=False):
     dataset_metrics = list()
     for i, dat in enumerate(tasks_per_dataset):
         dataset_metrics.append(dict())
@@ -246,7 +246,7 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
         model.eval()
         print_and_save('Evaluating after epoch: {} on {} set'.format(cur_epoch, dataset), log_file)
         for batch_idx, data in enumerate(test_iterator):
-            if flow:
+            if use_flow:
                 rgb, flow, targets, masks, dataset_ids = data
                 rgb = rgb.cuda(gpus[0])
                 flow = flow.cuda(gpus[0])
@@ -453,7 +453,7 @@ def validate_mfnet_mo_json(model, test_iterator, dataset, action_file):
 
     return json_outputs
 
-def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, cur_epoch, dataset, log_file, flow=False):
+def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, cur_epoch, dataset, log_file, use_flow=False):
     num_cls_outputs, num_g_outputs, num_h_outputs, num_o_outputs = num_outputs
     losses = AverageMeter()
     top1_meters = [AverageMeter() for _ in range(num_cls_outputs)]
@@ -465,7 +465,7 @@ def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, cur_epoch, d
         model.eval()
         for batch_idx, data in enumerate(test_iterator):
 
-            if flow:
+            if use_flow:
                 rgb, flow, targets, masks, video_names = data
                 rgb = rgb.cuda()
                 flow = flow.cuda()
