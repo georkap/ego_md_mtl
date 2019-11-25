@@ -118,7 +118,7 @@ def main():
 
         # evaluate dataset
         top1, outputs = validate(model_ft, ce_loss, val_iter, num_objectives, checkpoint['epoch'], args.dataset,
-                                 log_file)
+                                 log_file, args.flow)
 
         # calculate statistics
         for ind in range(len(num_classes)):

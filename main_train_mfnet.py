@@ -88,7 +88,7 @@ def main():
         RandomHorizontalFlip(), RandomHLS(vars=[15, 35, 25]), ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
     train_transforms_flow = transforms.Compose([
         RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288]), RandomCrop((224, 224)),
-        PredefinedHorizontalFlip, ToTensorVid(dim=2), Normalize(mean=mean_1d, std=std_1d)])
+        PredefinedHorizontalFlip(), ToTensorVid(dim=2), Normalize(mean=mean_1d, std=std_1d)])
     train_loader = MultitaskDatasetLoader(train_sampler, args.train_lists, args.dataset, tasks_per_dataset,
                                           batch_transform=train_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
                                           hand_list_prefix=args.hand_list_prefix[:],
@@ -119,10 +119,10 @@ def main():
     new_top1, top1 = [0.0] * num_cls_tasks, [0.0] * num_cls_tasks
     for epoch in range(args.max_epochs):
         train(model_ft, optimizer, ce_loss, train_iterator, tasks_per_dataset, epoch, log_file, args.gpus, lr_scheduler,
-              moo=args.moo)
+              moo=args.moo, flow=args.flow)
         if (epoch+1) % args.eval_freq == 0:
             if args.eval_on_train:
-                test(model_ft, ce_loss, train_iterator, tasks_per_dataset, epoch, "Train", log_file, args.gpus)
+                test(model_ft, ce_loss, train_iterator, tasks_per_dataset, epoch, "Train", log_file, args.gpus, args.flow)
             new_top1 = test(model_ft, ce_loss, test_iterator, tasks_per_dataset, epoch, "Test", log_file, args.gpus)
             top1 = save_mt_checkpoints(model_ft, optimizer, top1, new_top1, args.save_all_weights, output_dir,
                                        model_name, epoch, log_file)
