@@ -319,7 +319,7 @@ class MultitaskDatasetLoader(torchDataset):
             base_path, path = self.video_list[index].frames_path
             instance_name = self.video_list[index].instance_name
             validation_id = instance_name
-            frame_count = len(os.listdir(path))
+            frame_count = len(os.listdir(path)) - 1 # quick fix for loading flow files
             assert frame_count > 0
             start_frame = 0
             if 'H' in self.dataset_infos[dataset_name].td:
