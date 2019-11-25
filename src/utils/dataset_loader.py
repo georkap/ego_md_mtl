@@ -64,6 +64,7 @@ def load_images(data_path, frame_indices, image_tmpl):
 def load_flow_images(data_path, frame_indices, image_tmpl):
     flow = [] # the will go uvuv...
     for f_ind in frame_indices:
+        f_ind = f_ind + 1 if f_ind == 0 else f_ind
         u_name = os.path.join(data_path, 'u', image_tmpl.format(f_ind))
         v_name = os.path.join(data_path, 'v', image_tmpl.format(f_ind))
         _u = cv2.imread(u_name, cv2.IMREAD_GRAYSCALE)
@@ -319,7 +320,7 @@ class MultitaskDatasetLoader(torchDataset):
             base_path, path = self.video_list[index].frames_path
             instance_name = self.video_list[index].instance_name
             validation_id = instance_name
-            frame_count = len(os.listdir(path)) - 1 # quick fix for loading flow files
+            frame_count = len(os.listdir(path))
             assert frame_count > 0
             start_frame = 0
             if 'H' in self.dataset_infos[dataset_name].td:
