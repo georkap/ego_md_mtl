@@ -247,7 +247,7 @@ class MultitaskDatasetLoader(torchDataset):
                 video_list = parse_samples_list(split_file, data_line)
                 cls_tasks = GTEA_CLS_TASKS
                 max_num_classes = LABELS_GTEA
-                sub_with_flow = 'cropped_clipsframes\\'
+                sub_with_flow = 'clips_frames\\'
             else:
                 # undeveloped dataset yet e.g. something something or whatever
                 pass
