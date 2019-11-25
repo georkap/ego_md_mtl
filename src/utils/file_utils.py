@@ -10,6 +10,7 @@ import os
 import sys
 import torch
 import shutil
+import re
 from datetime import datetime
 import pandas as pd
 from matplotlib import pyplot as plt
@@ -269,3 +270,27 @@ def parse_log_file_name(name_parts):
     lr_type = name_parts[1].split('_')[7]
     dataset = name_parts[1].split('_')[-1]
     return batch_size, dropout, epochs, input_size, hidden_size, num_layers, seq_size, feature, lr_type, dataset
+
+def load_pretrained_weights(model_ft, args):
+    checkpoint = torch.load(args.pretrained_model_path)
+    # below line is needed if network is trained with DataParallel to remove 'module' prefix
+    base_dict = {'.'.join(k.split('.')[1:]): v for k, v in list(checkpoint['state_dict'].items())}
+    # remove classifiers from base dict
+    base_dict = {k: v for k, v in list(base_dict.items()) if 'classifier' not in k}
+    if args.long: # clone some weight maps to the longer network version
+        conv4_keys = [k for k in list(base_dict.keys()) if k.startswith('conv4')]
+        for i, key in enumerate(conv4_keys):
+            orig_layer_id = int(re.search(r"B\d{2}", key).group()[1:])
+            if orig_layer_id == 1:
+                continue
+            new_key = re.sub(re.search(r"B\d{2}", key).group(), "B{:02d}".format(orig_layer_id + 5), key)
+            base_dict[new_key] = base_dict[key]
+    if args.flow: # load the pretrained weights to both the 'rgb' and 'flow' streams
+        rgb_branch = getattr(model_ft, 'RGB')
+        rgb_branch.load_state_dict(base_dict, strict=False)
+        flow_branch = getattr(model_ft, 'Flow')
+        base_dict['conv1.conv.weight'] = base_dict['conv1.conv.weight'][:, 0:2]
+        flow_branch.load_state_dict(base_dict, strict=False)
+    else:
+        model_ft.load_state_dict(base_dict, strict=False)  # model.load_state_dict(checkpoint['state_dict'])
+    return model_ft

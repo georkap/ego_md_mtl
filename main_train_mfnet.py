@@ -18,7 +18,7 @@ from src.models.mfnet_3d_mo import MFNET_3D as MFNET_3D_MO
 from src.models.mfnet_3d_slowfast import MFNET_3D_SF as MFNET_3D_SF
 from src.models.mfnet_3d_mo_mm import MFNET_3D_MO_MM as MFNET_3D_MO_MM
 from src.utils.argparse_utils import parse_args, parse_tasks_str, parse_tasks_per_dataset
-from src.utils.file_utils import print_and_save, save_mt_checkpoints, init_folders, resume_checkpoint
+from src.utils.file_utils import print_and_save, save_mt_checkpoints, init_folders, resume_checkpoint, load_pretrained_weights
 from src.utils.dataset_loader import MultitaskDatasetLoader, prepare_sampler
 from src.utils.dataset_loader_utils import RandomScale, RandomCrop, RandomHorizontalFlip, RandomHLS, ToTensorVid,\
     Normalize, Resize, CenterCrop, PredefinedHorizontalFlip
@@ -38,34 +38,22 @@ def main():
     print_and_save(objectives_text, log_file)
     cudnn.benchmark = True
 
+    kwargs = dict()
     if args.sf:
         mfnet_3d = MFNET_3D_SF
     elif args.flow:
         mfnet_3d = MFNET_3D_MO_MM
+        kwargs['modalities'] = {'RGB':3, 'Flow':2}
     else:
         mfnet_3d = MFNET_3D_MO
 
-    kwargs = dict()
     kwargs["num_coords"] = num_coords
     kwargs["num_objects"] = num_objects
     if args.long:
         kwargs["k_sec"] = {2: 3, 3: 4, 4: 11, 5: 3}
     model_ft = mfnet_3d(num_classes, dropout=args.dropout, **kwargs)
     if args.pretrained:
-        checkpoint = torch.load(args.pretrained_model_path)
-        # below line is needed if network is trained with DataParallel
-        base_dict = {'.'.join(k.split('.')[1:]): v for k, v in list(checkpoint['state_dict'].items())}
-        base_dict = {k: v for k, v in list(base_dict.items()) if 'classifier' not in k}
-        if args.long:
-            conv4_keys = [k for k in list(base_dict.keys()) if k.startswith('conv4')]
-            import re
-            for i, key in enumerate(conv4_keys):
-                orig_layer_id = int(re.search(r"B\d{2}", key).group()[1:])
-                if orig_layer_id == 1:
-                    continue
-                new_key = re.sub(re.search(r"B\d{2}", key).group(), "B{:02d}".format(orig_layer_id+5), key)
-                base_dict[new_key] = base_dict[key]
-        model_ft.load_state_dict(base_dict, strict=False)  # model.load_state_dict(checkpoint['state_dict'])
+        model_ft = load_pretrained_weights(model_ft, args)
     model_ft.cuda(device=args.gpus[0])
     model_ft = torch.nn.DataParallel(model_ft, device_ids=args.gpus, output_device=args.gpus[0])
     print_and_save("Model loaded on gpu {} devices".format(args.gpus), log_file)

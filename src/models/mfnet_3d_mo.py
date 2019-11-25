@@ -180,12 +180,17 @@ class MFNET_3D(nn.Module):
             assert x.shape[2] == 16
 
             h = self.conv1(x)   # x224 -> x112
+            # print(h.shape)
             h = self.maxpool(h)  # x112 ->  x56
-
+            # print(h.shape)
             h = self.conv2(h)  # x56 ->  x56
+            # print(h.shape)
             h = self.conv3(h)  # x56 ->  x28
+            # print(h.shape)
             h = self.conv4(h)  # x28 ->  x14
+            # print(h.shape)
             h = self.conv5(h)  # x14 ->   x7
+            # print(h.shape)
 
             h = self.tail(h)
             coords, heatmaps, probabilities = None, None, None

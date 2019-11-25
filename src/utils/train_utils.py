@@ -45,7 +45,7 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
 
 
 def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_dataset, cur_epoch, log_file, gpus,
-                   lr_scheduler=None, moo=False):
+                   lr_scheduler=None, moo=False, flow=False):
     batch_time = AverageMeter()
     full_losses = AverageMeter()
     dataset_metrics = list()
@@ -78,12 +78,19 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
     print_and_save('*********', log_file)
     print_and_save('Beginning of epoch: {}'.format(cur_epoch), log_file)
     t0 = time.time()
-    for batch_idx, (inputs, targets, masks, dataset_ids) in enumerate(train_iterator):
+    for batch_idx, data in enumerate(train_iterator):
         if isinstance(lr_scheduler, CyclicLR):
             lr_scheduler.step()
 
+        if flow:
+            rgb, flow, targets, masks, dataset_ids = data
+            rgb = rgb.cuda(gpus[0])
+            flow = flow.cuda(gpus[0])
+            inputs = [rgb, flow]
+        else:
+            inputs, targets, masks, dataset_ids = data
+            inputs = inputs.cuda(gpus[0])
         optimizer.zero_grad()
-        inputs = inputs.cuda(gpus[0])
         batch_size = dataset_ids.shape[0]
 
         # identify the dataset that the samples of the batch belong to
@@ -222,7 +229,7 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
 
     print_and_save("Epoch train time: {}".format(batch_time.sum), log_file)
 
-def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch, dataset, log_file, gpus):
+def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch, dataset, log_file, gpus, flow=False):
     dataset_metrics = list()
     for i, dat in enumerate(tasks_per_dataset):
         dataset_metrics.append(dict())
@@ -238,8 +245,15 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
     with torch.no_grad():
         model.eval()
         print_and_save('Evaluating after epoch: {} on {} set'.format(cur_epoch, dataset), log_file)
-        for batch_idx, (inputs, targets, masks, dataset_ids) in enumerate(test_iterator):
-            inputs = inputs.cuda(gpus[0])
+        for batch_idx, data in enumerate(test_iterator):
+            if flow:
+                rgb, flow, targets, masks, dataset_ids = data
+                rgb = rgb.cuda(gpus[0])
+                flow = flow.cuda(gpus[0])
+                inputs = [rgb, flow]
+            else:
+                inputs, targets, masks, dataset_ids = data
+                inputs = inputs.cuda(gpus[0])
             batch_size = dataset_ids.shape[0]
 
             batch_ids_per_dataset = []
@@ -332,6 +346,7 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
     return task_top1s
 
 def validate_mfnet_mo_gaze(model, test_iterator, num_outputs, use_gaze, use_hands, cur_epoch, dataset, log_file):
+    # TODO: add updated code for flow
     auc_frame, auc_temporal = AverageMeter(), AverageMeter()
     aae_frame, aae_temporal = AverageMeter(), AverageMeter()
     print_and_save('Evaluating after epoch: {} on {} set'.format(cur_epoch, dataset), log_file)
@@ -391,6 +406,7 @@ def validate_mfnet_mo_gaze(model, test_iterator, num_outputs, use_gaze, use_hand
         print_and_save(to_print, log_file)
 
 def validate_mfnet_mo_json(model, test_iterator, dataset, action_file):
+    # TODO: add updated code for flow
     json_outputs = dict()
     json_outputs['version'] = '0.1'
     json_outputs['challenge'] = 'action_recognition'
@@ -437,7 +453,7 @@ def validate_mfnet_mo_json(model, test_iterator, dataset, action_file):
 
     return json_outputs
 
-def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, cur_epoch, dataset, log_file):
+def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, cur_epoch, dataset, log_file, flow=False):
     num_cls_outputs, num_g_outputs, num_h_outputs, num_o_outputs = num_outputs
     losses = AverageMeter()
     top1_meters = [AverageMeter() for _ in range(num_cls_outputs)]
@@ -447,8 +463,17 @@ def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, cur_epoch, d
     print_and_save('Evaluating after epoch: {} on {} set'.format(cur_epoch, dataset), log_file)
     with torch.no_grad():
         model.eval()
-        for batch_idx, (inputs, targets, masks, video_names) in enumerate(test_iterator):
-            inputs = inputs.cuda()
+        for batch_idx, data in enumerate(test_iterator):
+
+            if flow:
+                rgb, flow, targets, masks, video_names = data
+                rgb = rgb.cuda()
+                flow = flow.cuda()
+                inputs = [rgb, flow]
+            else:
+                inputs, targets, masks, video_names = data
+                inputs = inputs.cuda()
+
             outputs, coords, heatmaps, probabilities, objects = model(inputs)
             targets = targets.cuda().transpose(0, 1)
             masks = masks.cuda()
