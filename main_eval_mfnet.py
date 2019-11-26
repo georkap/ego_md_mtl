@@ -107,12 +107,15 @@ def main():
 
         val_transforms = transforms.Compose([Resize((256, 256), False), crop_type, ToTensorVid(),
                                              Normalize(mean=mean_3d, std=std_3d)])
-
+        val_transforms_flow = transforms.Compose(
+            [Resize((256, 256), False), CenterCrop((224, 224)), ToTensorVid(dim=2),
+             Normalize(mean=mean_1d, std=std_1d)])
         val_loader = MultitaskDatasetLoader(val_sampler, args.val_lists, args.dataset, tasks_per_dataset,
                                             batch_transform=val_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
                                             hand_list_prefix=args.hand_list_prefix[:],
                                             object_list_prefix=args.object_list_prefix[:],
-                                            validation=True)
+                                            validation=True,
+                                            use_flow=args.flow, flow_transforms=val_transforms_flow)
         val_iter = torch.utils.data.DataLoader(val_loader, batch_size=args.batch_size, shuffle=False,
                                                num_workers=args.num_workers, pin_memory=True)
 
