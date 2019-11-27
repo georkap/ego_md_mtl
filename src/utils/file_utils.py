@@ -292,5 +292,7 @@ def load_pretrained_weights(model_ft, args):
         base_dict['conv1.conv.weight'] = base_dict['conv1.conv.weight'][:, 0:2]
         flow_branch.load_state_dict(base_dict, strict=False)
     else:
+        if args.only_flow:
+            base_dict['conv1.conv.weight'] = base_dict['conv1.conv.weight'][:, 0:2]
         model_ft.load_state_dict(base_dict, strict=False)  # model.load_state_dict(checkpoint['state_dict'])
     return model_ft

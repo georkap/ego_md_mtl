@@ -223,7 +223,8 @@ def object_list_to_bpv(detections, num_noun_classes):
 class MultitaskDatasetLoader(torchDataset):
     def __init__(self, sampler, split_files, datasets, tasks_per_dataset, batch_transform,
                  gaze_list_prefix, hand_list_prefix, object_list_prefix,
-                 validation=False, eval_gaze=False, vis_data=False, use_flow=False, flow_transforms=None):
+                 validation=False, eval_gaze=False, vis_data=False, use_flow=False, flow_transforms=None,
+                 only_flow=False):
         self.sampler = sampler
         assert len(datasets) == len(tasks_per_dataset) # 1-1 association between dataset name, split file and resp tasks
         self.video_list = list()
@@ -264,6 +265,7 @@ class MultitaskDatasetLoader(torchDataset):
         self.validation = validation
         self.eval_gaze = eval_gaze
         self.vis_data = vis_data
+        self.only_flow = only_flow
 
     def __len__(self):
         return len(self.video_list)
@@ -339,11 +341,14 @@ class MultitaskDatasetLoader(torchDataset):
         orig_norm_val = self.dataset_infos[dataset_name].norm_val
         img_tmpl = self.dataset_infos[dataset_name].img_tmpl
         sampled_idxs = self.sampler.sampling(range_max=frame_count, v_id=index, start_frame=start_frame)
-        sampled_frames = load_images(path, sampled_idxs, img_tmpl)
-        clip_input = np.concatenate(sampled_frames, axis=2)
+
+        clip_input = None
+        if not self.only_flow:
+            sampled_frames = load_images(path, sampled_idxs, img_tmpl)
+            clip_input = np.concatenate(sampled_frames, axis=2)
 
         sampled_flow, clip_flow = None, None
-        if self.use_flow:
+        if self.use_flow or self.only_flow:
             sub_with_flow = self.dataset_infos[dataset_name].sub_with_flow
             flow_path = path.replace(sub_with_flow, 'flow\\')
             # for each flow channel load half the images of the rgb channel
@@ -381,7 +386,8 @@ class MultitaskDatasetLoader(torchDataset):
         trns_norm_val = orig_norm_val
         if self.transform is not None:
             # transform the frames
-            clip_input = self.transform(clip_input)
+            if not self.only_flow:
+                clip_input = self.transform(clip_input)
             # apply transforms to tracks
             if use_hands or use_gaze or self.use_flow:
                 scale_x, scale_y, tl_x, tl_y, is_flipped, is_training = self.get_scale_and_shift(or_w, or_h)
@@ -474,6 +480,8 @@ class MultitaskDatasetLoader(torchDataset):
         elif self.eval_gaze and use_gaze:
             orig_gaze = np.array([[value[0], value[1]] for key, value in gaze_data.items()], dtype=np.float32).flatten()
             to_return = (clip_input, clip_flow, labels, dataset_id, orig_gaze, validation_id) if self.use_flow else (clip_input, labels, dataset_id, orig_gaze, validation_id)
+        elif self.only_flow:
+            to_return = (clip_flow, labels, masks, dataset_id)
         else:
             to_return = (clip_input, clip_flow, labels, masks, dataset_id) if self.use_flow else (clip_input, labels, masks, dataset_id)
 

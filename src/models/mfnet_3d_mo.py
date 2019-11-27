@@ -88,7 +88,7 @@ class MFNET_3D(nn.Module):
         self.num_classes = num_classes
         self.num_coords = kwargs.get('num_coords', 0)
         self.num_objects = kwargs.get('num_objects', 0)
-
+        input_channels = kwargs.get('input_channels', 3)
         groups = 16
         # k_sec = {2: 3, 3: 4, 4: 6, 5: 3}
         k_sec = kwargs.get('k_sec', {2: 3, 3: 4, 4: 6, 5: 3})
@@ -96,7 +96,7 @@ class MFNET_3D(nn.Module):
         # conv1 - x224 (x16)
         conv1_num_out = 16
         self.conv1 = nn.Sequential(OrderedDict([
-                    ('conv', nn.Conv3d(3, conv1_num_out, kernel_size=(3, 5, 5), padding=(1, 2, 2), stride=(1, 2, 2),
+                    ('conv', nn.Conv3d(input_channels, conv1_num_out, kernel_size=(3, 5, 5), padding=(1, 2, 2), stride=(1, 2, 2),
                                        bias=False)),
                     ('bn', nn.BatchNorm3d(conv1_num_out)),
                     ('relu', nn.ReLU(inplace=True))

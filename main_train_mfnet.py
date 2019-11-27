@@ -46,6 +46,8 @@ def main():
         kwargs['modalities'] = {'RGB':3, 'Flow':2}
     else:
         mfnet_3d = MFNET_3D_MO
+        if args.only_flow:
+            kwargs['input_channels'] = 2
 
     kwargs["num_coords"] = num_coords
     kwargs["num_objects"] = num_objects
@@ -86,14 +88,20 @@ def main():
     train_transforms = transforms.Compose([
         RandomScale(make_square=True, aspect_ratio=[0.8, 1./0.8], slen=[224, 288]), RandomCrop((224, 224)),
         RandomHorizontalFlip(), RandomHLS(vars=[15, 35, 25]), ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
-    train_transforms_flow = transforms.Compose([
-        RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288]), RandomCrop((224, 224)),
-        PredefinedHorizontalFlip(), ToTensorVid(dim=2), Normalize(mean=mean_1d, std=std_1d)])
+    if args.only_flow:
+        train_transforms_flow = transforms.Compose([
+            RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288]), RandomCrop((224, 224)),
+            RandomHorizontalFlip(), ToTensorVid(dim=2), Normalize(mean=mean_1d, std=std_1d)])
+    else:
+        train_transforms_flow = transforms.Compose([
+            RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288]), RandomCrop((224, 224)),
+            PredefinedHorizontalFlip(), ToTensorVid(dim=2), Normalize(mean=mean_1d, std=std_1d)])
     train_loader = MultitaskDatasetLoader(train_sampler, args.train_lists, args.dataset, tasks_per_dataset,
                                           batch_transform=train_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
                                           hand_list_prefix=args.hand_list_prefix[:],
                                           object_list_prefix=args.object_list_prefix[:],
-                                          use_flow=args.flow, flow_transforms=train_transforms_flow)
+                                          use_flow=args.flow, flow_transforms=train_transforms_flow,
+                                          only_flow=args.only_flow)
     train_iterator = torch.utils.data.DataLoader(train_loader, batch_size=args.batch_size, shuffle=True,
                                                  num_workers=args.num_workers, pin_memory=True)
 
@@ -106,7 +114,8 @@ def main():
                                          batch_transform=test_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
                                          hand_list_prefix=args.hand_list_prefix[:],
                                          object_list_prefix=args.object_list_prefix[:],
-                                         use_flow=args.flow, flow_transforms=test_transforms_flow)
+                                         use_flow=args.flow, flow_transforms=test_transforms_flow,
+                                         only_flow=args.only_flow)
     test_iterator = torch.utils.data.DataLoader(test_loader, batch_size=args.batch_size, shuffle=False,
                                                 num_workers=args.num_workers, pin_memory=True)
 
