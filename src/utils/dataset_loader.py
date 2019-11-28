@@ -266,23 +266,25 @@ class MultitaskDatasetLoader(torchDataset):
         self.eval_gaze = eval_gaze
         self.vis_data = vis_data
         self.only_flow = only_flow
+        if self.only_flow:
+            self.use_flow = False
 
     def __len__(self):
         return len(self.video_list)
 
-    def get_scale_and_shift(self, orig_width, orig_height):
+    def get_scale_and_shift(self, orig_width, orig_height, _transforms):
         is_flipped = False
         is_training = False
-        if 'RandomScale' in self.transform.transforms[0].__repr__():
+        if 'RandomScale' in _transforms.transforms[0].__repr__():
             # means we are in training so get the transformations
             is_training = True
-            sc_w, sc_h = self.transform.transforms[0].get_new_size()
-            tl_y, tl_x = self.transform.transforms[1].get_tl()
-            if 'RandomHorizontalFlip' in self.transform.transforms[2].__repr__():
-                is_flipped = self.transform.transforms[2].is_flipped()
-        elif 'Resize' in self.transform.transforms[0].__repr__():  # means we are in testing
-            sc_h, sc_w, _ = self.transform.transforms[0].get_new_shape()
-            tl_y, tl_x = self.transform.transforms[1].get_tl()
+            sc_w, sc_h = _transforms.transforms[0].get_new_size()
+            tl_y, tl_x = _transforms.transforms[1].get_tl()
+            if 'RandomHorizontalFlip' in _transforms.transforms[2].__repr__():
+                is_flipped = _transforms.transforms[2].is_flipped()
+        elif 'Resize' in _transforms.transforms[0].__repr__():  # means we are in testing
+            sc_h, sc_w, _ = _transforms.transforms[0].get_new_shape()
+            tl_y, tl_x = _transforms.transforms[1].get_tl()
         else:
             sc_w = orig_width
             sc_h = orig_height
@@ -342,7 +344,7 @@ class MultitaskDatasetLoader(torchDataset):
         img_tmpl = self.dataset_infos[dataset_name].img_tmpl
         sampled_idxs = self.sampler.sampling(range_max=frame_count, v_id=index, start_frame=start_frame)
 
-        clip_input = None
+        sampled_frames, clip_input = None, None
         if not self.only_flow:
             sampled_frames = load_images(path, sampled_idxs, img_tmpl)
             clip_input = np.concatenate(sampled_frames, axis=2)
@@ -351,13 +353,20 @@ class MultitaskDatasetLoader(torchDataset):
         if self.use_flow or self.only_flow:
             sub_with_flow = self.dataset_infos[dataset_name].sub_with_flow
             flow_path = path.replace(sub_with_flow, 'flow\\')
+            if self.only_flow:
+                flow_idxs = (np.array(sampled_idxs)//2)
+            else:
+                flow_idxs = (np.array(sampled_idxs)//2)[::2]
             # for each flow channel load half the images of the rgb channel
-            sampled_flow = load_flow_images(flow_path, (np.array(sampled_idxs)//2)[::2], img_tmpl)
+            sampled_flow = load_flow_images(flow_path, flow_idxs, img_tmpl)
             clip_flow = np.concatenate(sampled_flow, axis=2)
 
         sampled_idxs = (np.array(sampled_idxs) - start_frame).astype(np.int)
 
-        or_h, or_w, _ = clip_input.shape
+        if self.only_flow:
+            or_h, or_w, _ = clip_flow.shape
+        else:
+            or_h, or_w, _ = clip_input.shape
 
         # hands points is the final output, hand tracks is pickle, left and right track are intermediate versions
         hand_points, hand_tracks, left_track, right_track, left_track_vis, right_track_vis = None, None, None, None, None, None
@@ -386,25 +395,40 @@ class MultitaskDatasetLoader(torchDataset):
         trns_norm_val = orig_norm_val
         if self.transform is not None:
             # transform the frames
-            if not self.only_flow:
+            if not self.only_flow: # if only flow there is no rgb clip
                 clip_input = self.transform(clip_input)
-            # apply transforms to tracks
-            if use_hands or use_gaze or self.use_flow:
-                scale_x, scale_y, tl_x, tl_y, is_flipped, is_training = self.get_scale_and_shift(or_w, or_h)
-                _, _, max_h, max_w = clip_input.shape
+            # apply transforms to tracks and flow
+            if use_hands or use_gaze or self.use_flow or self.only_flow:
+                # normal work-flow for multibranch and rgb only
+                if not self.only_flow:
+                    # if there is rgb stream get the tranform details for the other modalities from here
+                    scale_x, scale_y, tl_x, tl_y, is_flipped, is_training = self.get_scale_and_shift(or_w, or_h,
+                                                                                                     self.transform)
+                    # set predetermined flipping transform only if training for multi-branch network
+                    if self.use_flow and is_training:
+                        self.flow_transforms.transforms[2].set_flip(is_flipped)
+
+                # if evaluating multi-branch or train/eval single-branch flow just apply the transforms
+                if self.use_flow or self.only_flow:
+                    clip_flow = self.flow_transforms(clip_flow)
+
+                # finally, if there is only the flow branch get the transforms from here
+                if self.only_flow:
+                    scale_x, scale_y, tl_x, tl_y, is_flipped, is_training = self.get_scale_and_shift(or_w, or_h,
+                                                                                                     self.flow_transforms)
+                    _, _, max_h, max_w = clip_flow.shape
+                else:
+                    _, _, max_h, max_w = clip_input.shape
+
                 trns_norm_val = [max_w, max_h, max_w, max_h]
-                if use_hands:
+                if use_hands: # apply transforms to hand tracks
                     left_track = apply_transform_to_track(left_track, scale_x, scale_y, tl_x, tl_y, trns_norm_val,
                                                           is_flipped)
                     right_track = apply_transform_to_track(right_track, scale_x, scale_y, tl_x, tl_y, trns_norm_val,
                                                            is_flipped)
-                if use_gaze:
+                if use_gaze: # apply transforms to gaze tracks
                     gaze_track = apply_transform_to_track(gaze_track, scale_x, scale_y, tl_x, tl_y, trns_norm_val,
                                                           is_flipped)
-                if self.use_flow:
-                    if is_training:
-                        self.flow_transforms.transforms[2].set_flip(is_flipped)
-                    clip_flow = self.flow_transforms(clip_flow)
 
         norm_val = trns_norm_val if self.transform is not None else orig_norm_val
         if use_hands:
@@ -476,7 +500,12 @@ class MultitaskDatasetLoader(torchDataset):
 
         to_return = None
         if self.validation:
-            to_return = (clip_input, clip_flow, labels, masks, validation_id) if self.use_flow else (clip_input, labels, masks, validation_id)
+            if self.use_flow:
+                to_return = (clip_input, clip_flow, labels, masks, validation_id)
+            elif self.only_flow:
+                to_return = (clip_flow, labels, masks, validation_id)
+            else:
+                to_return = (clip_input, labels, masks, validation_id)
         elif self.eval_gaze and use_gaze:
             orig_gaze = np.array([[value[0], value[1]] for key, value in gaze_data.items()], dtype=np.float32).flatten()
             to_return = (clip_input, clip_flow, labels, dataset_id, orig_gaze, validation_id) if self.use_flow else (clip_input, labels, dataset_id, orig_gaze, validation_id)
@@ -573,7 +602,7 @@ if __name__ == '__main__':
     #### tests
     # Note: before running tests put working directory as the "main" files
     # 1 test dataloader for epic kitchens
-    tasks_str = 'N352HO352' # "V125N352" # "A2513N352H" ok # "A2513V125N352H" ok # "V125N351" ok # "V125H" ok # "A2513V125N351H" ok  # "A2513V125N351GH" crashes due to 'G'
+    tasks_str = 'N352' # "V125N352" # "A2513N352H" ok # "A2513V125N352H" ok # "V125N351" ok # "V125H" ok # "A2513V125N351H" ok  # "A2513V125N351GH" crashes due to 'G'
     datasets = ['epick']
     tpd = parse_tasks_str(tasks_str, datasets)
     video_list_file = [r"other\splits\EPIC_KITCHENS\epic_rgb_new_nd_val_act\epic_rgb_new_val_1_fake.txt"]
@@ -606,13 +635,15 @@ if __name__ == '__main__':
     loader = MultitaskDatasetLoader(test_sampler, video_list_file, datasets, tasks_per_dataset=tpd,
                                     batch_transform=train_transforms, gaze_list_prefix=_glp, hand_list_prefix=_hlp,
                                     object_list_prefix=_olp,
-                                    validation=True, eval_gaze=False, vis_data=True, use_flow=True,
-                                    flow_transforms=train_flow_transforms)
+                                    validation=True, eval_gaze=False, vis_data=False, use_flow=False,
+                                    flow_transforms=train_flow_transforms, only_flow=True)
 
     for ind in range(len(loader)):
         data_point = loader.__getitem__(ind)
         if loader.use_flow:
             _clip_input, _clip_flow, _labels, _dataset_id, _validation_id = data_point
+        elif loader.only_flow:
+            _clip_flow, _labels, _dataset_id, _validation_id = data_point
         else:
             _clip_input, _labels, _dataset_id, _validation_id = data_point
         print("\rItem {}: {}: {}".format(ind, _validation_id, _labels))
