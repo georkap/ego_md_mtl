@@ -527,10 +527,10 @@ def vis_with_circle_gaze(img, gaze_point, winname):
 
 def visualize_item(sampled_frames, clip_input, sampled_idxs, use_hands, hand_tracks, left_track_vis, right_track_vis,
                    use_gaze, gaze_data, gaze_track_vis, or_w, or_h, norm_val, use_flow, sampled_flow, clip_flow):
-    # for i in range(len(sampled_frames)):
-        #     cv2.imshow('orig_img', sampled_frames[i])
-        #     cv2.imshow('transform', clip_input[:, i, :, :].numpy().transpose(1, 2, 0))
-        #     cv2.waitKey(0)
+    for i in range(len(sampled_frames)):
+        cv2.imshow('orig_img', sampled_frames[i])
+        cv2.imshow('transform', clip_input[:, i, :, :].numpy().transpose(1, 2, 0))
+        cv2.waitKey(0)
         if use_hands:
             orig_left = np.array(hand_tracks['left'], dtype=np.float32)
             orig_left = orig_left[sampled_idxs]
@@ -573,7 +573,7 @@ if __name__ == '__main__':
     # video_list_file = r"splits\gtea_rgb_frames\fake_split3.txt"
 
     import torchvision.transforms as transforms
-    from src.utils.dataset_loader_utils import RandomScale, RandomCrop, RandomHorizontalFlip, RandomHLS, ToTensorVid, \
+    from src.utils.dataset_loader_utils import RandomScale, RandomCrop, RandomHorizontalFlip, RandomHLS, RandomHLS_2, ToTensorVid, \
         Normalize, Resize, CenterCrop, PredefinedHorizontalFlip
     mean_3d = [124 / 255, 117 / 255, 104 / 255]
     std_3d = [0.229, 0.224, 0.225]
@@ -585,7 +585,8 @@ if __name__ == '__main__':
     seed = 0
     train_transforms = transforms.Compose([
         RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288], seed=seed),
-        RandomCrop((224, 224), seed=seed), RandomHorizontalFlip(seed=seed), RandomHLS(vars=[15, 35, 25]),
+        RandomCrop((224, 224), seed=seed), RandomHorizontalFlip(seed=seed),
+        RandomHLS(vars=[15, 35, 25]),
         ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
     train_flow_transforms = transforms.Compose([
         RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288], seed=seed),
@@ -636,14 +637,25 @@ if __name__ == '__main__':
                                     batch_transform=train_transforms, gaze_list_prefix=_glp, hand_list_prefix=_hlp,
                                     object_list_prefix=_olp,
                                     validation=True, eval_gaze=False, vis_data=False, use_flow=False,
-                                    flow_transforms=train_flow_transforms, only_flow=True)
+                                    flow_transforms=train_flow_transforms, only_flow=False)
 
-    for ind in range(len(loader)):
-        data_point = loader.__getitem__(ind)
-        if loader.use_flow:
-            _clip_input, _clip_flow, _labels, _dataset_id, _validation_id = data_point
-        elif loader.only_flow:
-            _clip_flow, _labels, _dataset_id, _validation_id = data_point
-        else:
-            _clip_input, _labels, _dataset_id, _validation_id = data_point
-        print("\rItem {}: {}: {}".format(ind, _validation_id, _labels))
+    # for ind in range(len(loader)):
+    #     data_point = loader.__getitem__(ind)
+    #     if loader.use_flow:
+    #         _clip_input, _clip_flow, _labels, _dataset_id, _validation_id = data_point
+    #     elif loader.only_flow:
+    #         _clip_flow, _labels, _dataset_id, _validation_id = data_point
+    #     else:
+    #         _clip_input, _labels, _dataset_id, _validation_id = data_point
+    #     print("\rItem {}: {}: {}".format(ind, _validation_id, _labels))
+
+    import time
+    t0 = time.time()
+    for i in range(10):
+        data_point = loader.__getitem__(0)
+    t1 = time.time()
+
+    print('time for rgb2hls', loader.transform.transforms[3].time_rgb2hls)
+    # print('time for augmentations', loader.transform.transforms[3].time_aug)
+    # print('time for hls2rgb', loader.transform.transforms[3].time_hls2rgb)
+    print('total time', t1-t0)

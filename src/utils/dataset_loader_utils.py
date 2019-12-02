@@ -307,11 +307,47 @@ class RandomScale(object):
 
     def get_new_size(self):
         return self.new_size
-    
+
+#import time
+
+class RandomHLS_2(object):
+    def __init__(self, vars=[15, 35, 25]):
+        self.vars = vars
+        self.rng = np.random.RandomState(0)
+        self.time_rgb2hls = 0
+        self.time_aug = 0
+        self.time_hls2rgb = 0
+
+    def __call__(self, data):
+        assert data.ndim == 3, 'cannot operate on a single channel'
+        h, w, c = data.shape
+        assert c % 3 == 0, "input channel = %d, illegal" % c
+        num_ims = c//3
+
+        random_vars = tuple(int(round(self.rng.uniform(-x, x))) for x in (self.vars + [0]))
+        augmented_data = np.zeros(data.shape, dtype=np.uint8)
+
+        # t0 = time.time()
+        for i_im in range(0, num_ims): # for every image do the magic
+            start, end = 3*i_im, 3*(i_im+1)
+            augmented_data[:, :, start:end] = cv2.cvtColor(data[:, :, start:end], cv2.COLOR_RGB2HLS)
+            augmented_data[:, :, start:end] = cv2.add(augmented_data[:, :, start:end], random_vars, dtype=cv2.CV_8UC3)
+            mask = cv2.inRange(augmented_data[:, :, start:end], 0, 180)
+            augmented_data[mask == 0, start] = 180
+            augmented_data[:, :, start:end] = cv2.cvtColor(augmented_data[:, :, start:end], cv2.COLOR_HLS2RGB)
+        # t1 = time.time()
+
+        # self.time_rgb2hls += t1-t0
+
+        return augmented_data
+
 class RandomHLS(object):
     def __init__(self, vars=[15, 35, 25]):
         self.vars = vars
         self.rng = np.random.RandomState(0)
+        self.time_rgb2hls = 0
+        self.time_aug = 0
+        self.time_hls2rgb = 0
 
     def __call__(self, data):
         h, w, c = data.shape
@@ -322,20 +358,27 @@ class RandomHLS(object):
         base = len(random_vars)
         augmented_data = np.zeros(data.shape, )
 
+        # t0 = time.time()
         for i_im in range(0, int(c/3)):
-            augmented_data[:,:,3*i_im:(3*i_im+3)] = \
-                    cv2.cvtColor(data[:,:,3*i_im:(3*i_im+3)], cv2.COLOR_RGB2HLS)
+            augmented_data[:, :, 3*i_im:(3*i_im+3)] = cv2.cvtColor(data[:, :, 3*i_im:(3*i_im+3)], cv2.COLOR_RGB2HLS)
+        # t1 = time.time()
 
         hls_limits = [180, 255, 255]
+        # t2 = time.time()
         for ic in range(0, c):
             var = random_vars[ic%base]
             limit = hls_limits[ic%base]
-            augmented_data[:,:,ic] = np.minimum(np.maximum(augmented_data[:,:,ic] + var, 0), limit)
+            augmented_data[:, :, ic] = np.minimum(np.maximum(augmented_data[:, :, ic] + var, 0), limit)
+        # t3 = time.time()
 
+        # t4 = time.time()
         for i_im in range(0, int(c/3)):
-            augmented_data[:,:,3*i_im:(3*i_im+3)] = \
-                    cv2.cvtColor(augmented_data[:,:,3*i_im:(3*i_im+3)].astype(np.uint8), \
-                        cv2.COLOR_HLS2RGB)
+            augmented_data[:, :, 3*i_im:(3*i_im+3)] = cv2.cvtColor(augmented_data[:, :, 3*i_im:(3*i_im+3)].astype(np.uint8), cv2.COLOR_HLS2RGB)
+        # t5 = time.time()
+
+        # self.time_rgb2hls += t1-t0
+        # self.time_aug += t3-t2
+        # self.time_hls2rgb += t5-t4
 
         return augmented_data
 
