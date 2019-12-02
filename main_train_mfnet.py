@@ -20,7 +20,7 @@ from src.models.mfnet_3d_mo_mm import MFNET_3D_MO_MM as MFNET_3D_MO_MM
 from src.utils.argparse_utils import parse_args, parse_tasks_str, parse_tasks_per_dataset
 from src.utils.file_utils import print_and_save, save_mt_checkpoints, init_folders, resume_checkpoint, load_pretrained_weights
 from src.utils.dataset_loader import MultitaskDatasetLoader, prepare_sampler
-from src.utils.dataset_loader_utils import RandomScale, RandomCrop, RandomHorizontalFlip, RandomHLS, ToTensorVid,\
+from src.utils.dataset_loader_utils import RandomScale, RandomCrop, RandomHorizontalFlip, RandomHLS, RandomHLS_2, ToTensorVid,\
     Normalize, Resize, CenterCrop, PredefinedHorizontalFlip
 from src.utils.train_utils import train_mfnet_mo, test_mfnet_mo
 from src.utils.lr_utils import load_lr_scheduler
@@ -87,7 +87,7 @@ def main():
     train_sampler = prepare_sampler("train", args.clip_length, args.frame_interval)
     train_transforms = transforms.Compose([
         RandomScale(make_square=True, aspect_ratio=[0.8, 1./0.8], slen=[224, 288]), RandomCrop((224, 224)),
-        RandomHorizontalFlip(), RandomHLS(vars=[15, 35, 25]), ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
+        RandomHorizontalFlip(), RandomHLS_2(vars=[15, 35, 25]), ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
     if args.only_flow:
         train_transforms_flow = transforms.Compose([
             RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288]), RandomCrop((224, 224)),
