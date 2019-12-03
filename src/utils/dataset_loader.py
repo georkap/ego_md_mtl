@@ -586,7 +586,7 @@ if __name__ == '__main__':
     train_transforms = transforms.Compose([
         RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288], seed=seed),
         RandomCrop((224, 224), seed=seed), RandomHorizontalFlip(seed=seed),
-        RandomHLS(vars=[15, 35, 25]),
+        RandomHLS_2(vars=[15, 35, 25]),
         ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
     train_flow_transforms = transforms.Compose([
         RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288], seed=seed),
@@ -603,18 +603,19 @@ if __name__ == '__main__':
     #### tests
     # Note: before running tests put working directory as the "main" files
     # 1 test dataloader for epic kitchens
-    tasks_str = 'N352' # "V125N352" # "A2513N352H" ok # "A2513V125N352H" ok # "V125N351" ok # "V125H" ok # "A2513V125N351H" ok  # "A2513V125N351GH" crashes due to 'G'
-    datasets = ['epick']
-    tpd = parse_tasks_str(tasks_str, datasets)
-    video_list_file = [r"other\splits\EPIC_KITCHENS\epic_rgb_new_nd_val_act\epic_rgb_new_val_1_fake.txt"]
+    # tasks_str = 'N352' # "V125N352" # "A2513N352H" ok # "A2513V125N352H" ok # "V125N351" ok # "V125H" ok # "A2513V125N351H" ok  # "A2513V125N351GH" crashes due to 'G'
+    # datasets = ['epick']
+    # tpd = parse_tasks_str(tasks_str, datasets)
+    # video_list_file = [r"other\splits\EPIC_KITCHENS\epic_rgb_new_nd_val_act\epic_rgb_new_val_1_fake.txt"]
     _hlp = ['hand_detection_tracks_lr005_new']
     _glp = ['gaze_tracks']
     _olp = ['noun_bpv_oh']
 
     # 2 test dataloader for egtea
-    # tasks_str = "A106N53" ok # "N53GH" ok # "A106V19N53GH" ok
-    # tpd = parse_tasks_str(tasks_str)
-    # video_list_file = r"other\splits\EGTEA\fake_split3.txt"
+    tasks_str = "A106V19N53" # "N53GH" ok # "A106V19N53GH" ok
+    datasets = ['egtea']
+    tpd = parse_tasks_str(tasks_str, datasets)
+    video_list_file = [r"other\splits\EGTEA\fake_split5.txt"]
     # _hlp = 'hand_detection_tracks_lr005'
     # _glp = 'gaze_tracks'
 
@@ -636,7 +637,7 @@ if __name__ == '__main__':
     loader = MultitaskDatasetLoader(test_sampler, video_list_file, datasets, tasks_per_dataset=tpd,
                                     batch_transform=train_transforms, gaze_list_prefix=_glp, hand_list_prefix=_hlp,
                                     object_list_prefix=_olp,
-                                    validation=True, eval_gaze=False, vis_data=False, use_flow=False,
+                                    validation=True, eval_gaze=False, vis_data=True, use_flow=False,
                                     flow_transforms=train_flow_transforms, only_flow=False)
 
     # for ind in range(len(loader)):
@@ -649,13 +650,13 @@ if __name__ == '__main__':
     #         _clip_input, _labels, _dataset_id, _validation_id = data_point
     #     print("\rItem {}: {}: {}".format(ind, _validation_id, _labels))
 
-    import time
-    t0 = time.time()
-    for i in range(10):
-        data_point = loader.__getitem__(0)
-    t1 = time.time()
+    # import time
+    # t0 = time.time()
+    for i in range(1):
+        data_point = loader.__getitem__(i)
+    # t1 = time.time()
 
-    print('time for rgb2hls', loader.transform.transforms[3].time_rgb2hls)
+    # print('time for rgb2hls', loader.transform.transforms[3].time_rgb2hls)
     # print('time for augmentations', loader.transform.transforms[3].time_aug)
     # print('time for hls2rgb', loader.transform.transforms[3].time_hls2rgb)
-    print('total time', t1-t0)
+    # print('total time', t1-t0)

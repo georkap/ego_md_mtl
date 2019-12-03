@@ -314,9 +314,10 @@ class RandomHLS_2(object):
     def __init__(self, vars=[15, 35, 25]):
         self.vars = vars
         self.rng = np.random.RandomState(0)
-        self.time_rgb2hls = 0
-        self.time_aug = 0
-        self.time_hls2rgb = 0
+        # self.time_rgb2hls = 0
+        # self.time_aug = 0
+        # self.time_hls2rgb = 0
+        # self.random_vars = 0
 
     def __call__(self, data):
         assert data.ndim == 3, 'cannot operate on a single channel'
@@ -325,6 +326,8 @@ class RandomHLS_2(object):
         num_ims = c//3
 
         random_vars = tuple(int(round(self.rng.uniform(-x, x))) for x in (self.vars + [0]))
+        # random_vars = (15, 35, 25, 0)
+        # self.random_vars = random_vars
         augmented_data = np.zeros(data.shape, dtype=np.uint8)
 
         # t0 = time.time()
@@ -332,7 +335,7 @@ class RandomHLS_2(object):
             start, end = 3*i_im, 3*(i_im+1)
             augmented_data[:, :, start:end] = cv2.cvtColor(data[:, :, start:end], cv2.COLOR_RGB2HLS)
             augmented_data[:, :, start:end] = cv2.add(augmented_data[:, :, start:end], random_vars, dtype=cv2.CV_8UC3)
-            mask = cv2.inRange(augmented_data[:, :, start:end], 0, 180)
+            mask = cv2.inRange(augmented_data[:, :, start], 0, 180)
             augmented_data[mask == 0, start] = 180
             augmented_data[:, :, start:end] = cv2.cvtColor(augmented_data[:, :, start:end], cv2.COLOR_HLS2RGB)
         # t1 = time.time()
@@ -345,16 +348,18 @@ class RandomHLS(object):
     def __init__(self, vars=[15, 35, 25]):
         self.vars = vars
         self.rng = np.random.RandomState(0)
-        self.time_rgb2hls = 0
-        self.time_aug = 0
-        self.time_hls2rgb = 0
+        # self.time_rgb2hls = 0
+        # self.time_aug = 0
+        # self.time_hls2rgb = 0
+        # self.random_vars = 0
 
     def __call__(self, data):
         h, w, c = data.shape
         assert c%3 == 0, "input channel = %d, illegal"%c
 
         random_vars = [int(round(self.rng.uniform(-x, x))) for x in self.vars]
-
+        # random_vars = [15, 35, 25]
+        # self.random_vars = random_vars
         base = len(random_vars)
         augmented_data = np.zeros(data.shape, )
 
