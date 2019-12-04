@@ -16,6 +16,6 @@ def single_object_loss(objects, object_targets):
 def multiple_object_loss(objects, object_targets):
     obj_losses = []
     for obj, tar in zip(objects, object_targets):
-        obj_losses.append(F.binary_cross_entropy_with_logits(obj, tar.unsqueeze(1)))
+        obj_losses.append(F.binary_cross_entropy_with_logits(obj, tar.unsqueeze(1).type(obj.dtype)))
 
     return sum(obj_losses)
