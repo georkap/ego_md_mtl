@@ -119,6 +119,7 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
         outputs_per_dataset = []
         targets_per_dataset = []
         masks_per_dataset = []
+        objects_per_dataset = []
         global_task_id = 0 # assign indices to keep track of the tasks because the model outputs come in a sequence
         global_coord_id = 0
         global_object_id = 0
@@ -136,6 +137,7 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
             targets_per_dataset.append(tmp_targets)
             masks_per_dataset.append(tmp_masks)
             outputs_per_dataset.append([])
+            objects_per_dataset.append([])
 # when a dataset does not have any representative samples in a batch
             if not len(tmp_targets[0]) > 0:
                 global_task_id += num_cls_tasks
@@ -153,12 +155,13 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
                 hea = heatmaps[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id+num_coord_tasks, :]
                 # pro = probabilities[batch_ids_per_dataset[dataset_ids], :]
 # get model's outputs for the object classification tasks of the current dataset
-            obj = None
             if objects is not None:
-                obj = objects[batch_ids_per_dataset[dataset_id], :]
+                for no in range(len(objects[global_object_id])):
+                    objects_per_dataset[dataset_id].append(objects[global_object_id][no][batch_ids_per_dataset[dataset_id], :])
             loss, cls_losses, gaze_coord_losses, hand_coord_losses, object_losses = get_mtl_losses(
                 targets_per_dataset[dataset_id], masks_per_dataset[dataset_id], outputs_per_dataset[dataset_id],
-                coo, hea, pro, obj, (num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks), criterion)
+                coo, hea, pro, objects_per_dataset[dataset_id], (num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks),
+                criterion)
             global_task_id += num_cls_tasks
             global_coord_id += num_coord_tasks
             global_object_id += num_o_tasks
@@ -268,6 +271,7 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
             outputs_per_dataset = []
             targets_per_dataset = []
             masks_per_dataset = []
+            objects_per_dataset = []
             global_task_id = 0
             global_coord_id = 0
             global_object_id = 0
@@ -282,6 +286,7 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
                 targets_per_dataset.append(tmp_targets)
                 masks_per_dataset.append(tmp_masks)
                 outputs_per_dataset.append([])
+                objects_per_dataset.append([])
                 if not len(tmp_targets[0]) > 0:
                     global_task_id += num_cls_tasks
                     global_coord_id += num_coord_tasks
@@ -295,12 +300,13 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
                     coo = coords[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id + num_coord_tasks, :]
                     hea = heatmaps[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id + num_coord_tasks, :]
                     # pro = probabilities[batch_ids_per_dataset[dataset_ids], :]
-                obj = None
                 if objects is not None:
-                    obj = objects[batch_ids_per_dataset[dataset_id], :]
+                    for no in range(len(objects[global_object_id])):
+                        objects_per_dataset[dataset_id].append(
+                            objects[global_object_id][no][batch_ids_per_dataset[dataset_id], :])
                 loss, cls_losses, gaze_coord_losses, hand_coord_losses, object_losses = get_mtl_losses(
                     targets_per_dataset[dataset_id], masks_per_dataset[dataset_id], outputs_per_dataset[dataset_id],
-                    coo, hea, pro, obj, (num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks), criterion)
+                    coo, hea, pro, objects_per_dataset[dataset_id], (num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks), criterion)
 
                 global_task_id += num_cls_tasks
                 global_coord_id += num_coord_tasks

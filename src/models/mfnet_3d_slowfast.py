@@ -1,7 +1,8 @@
 from collections import OrderedDict
 import torch
 import torch.nn as nn
-from src.models.mfnet_3d_mo import BN_AC_CONV3D, MultitaskClassifiers
+from src.models.mfnet_3d_mo import BN_AC_CONV3D
+from src.models.custom_layers import MultitaskClassifiers
 from src.utils.initializer import xavier
 
 class MF_UNIT_SF(nn.Module):

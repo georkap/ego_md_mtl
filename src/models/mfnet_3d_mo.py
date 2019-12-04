@@ -13,23 +13,8 @@ mo stands for multiple output
 from collections import OrderedDict
 import torch.nn as nn
 
-from src.models.custom_layers import CoordRegressionLayer
+from src.models.custom_layers import CoordRegressionLayer, MultitaskClassifiers, ObjectPresenceLayer
 from src.utils.initializer import xavier
-
-
-class MultitaskClassifiers(nn.Module):
-    def __init__(self, last_conv_size, num_classes):
-        super(MultitaskClassifiers, self).__init__()
-        self.num_classes = [num_cls for num_cls in num_classes if num_cls > 0]
-        self.classifier_list = nn.ModuleList(
-            [nn.Linear(last_conv_size, num_cls) for num_cls in self.num_classes])
-
-    def forward(self, h):
-        h_out = []
-        for i, cl in enumerate(self.classifier_list):
-            h_out.append(cl(h))
-
-        return h_out
 
 
 class BN_AC_CONV3D(nn.Module):
@@ -87,7 +72,8 @@ class MFNET_3D(nn.Module):
         # (e.g. actions->actions and not actions->verbs,nouns etc.)
         self.num_classes = num_classes
         self.num_coords = kwargs.get('num_coords', 0)
-        self.num_objects = kwargs.get('num_objects', 0)
+        self.num_objects = kwargs.get('num_objects', None)
+        self.one_object_layer = kwargs.get('one_object_layer', False)
         input_channels = kwargs.get('input_channels', 3)
         groups = 16
         # k_sec = {2: 3, 3: 4, 4: 6, 5: 3}
@@ -168,8 +154,10 @@ class MFNET_3D(nn.Module):
 
         self.classifier_list = MultitaskClassifiers(conv5_num_out, num_classes)
 
-        if self.num_objects > 0:
-            self.object_classifier = nn.Linear(conv5_num_out, self.num_objects)
+        if self.num_objects:
+            for ii, no in enumerate(self.num_objects): # if there are more than one object presence layers, e.g. one per dataset
+                object_presence_layer = ObjectPresenceLayer(conv5_num_out, no, one_layer=self.one_object_layer)
+                self.add_module('object_presence_layer_{}'.format(ii), object_presence_layer)
 
         #############
         # Initialization
@@ -204,8 +192,8 @@ class MFNET_3D(nn.Module):
             h_out = self.classifier_list(h)
 
             objects = None
-            if self.num_objects > 0:
-                objects = self.object_classifier(h)
+            if self.num_objects:
+                objects = [self.__getattr__('object_presence_layer_{}'.format(ii))(h) for ii in range(len(self.num_objects))]
 
             return h_out, coords, heatmaps, probabilities, objects
         elif upto == 'shared':
@@ -248,12 +236,13 @@ class MFNET_3D(nn.Module):
 if __name__ == "__main__":
     import torch
     # ---------
-    kwargs = {'num_coords': 0}
+    kwargs = {'num_coords': 0, 'num_objects': [15]}
     net = MFNET_3D(num_classes=[5], pretrained=False, **kwargs)
-    # data = torch.randn(1, 3, 16, 224, 224, requires_grad=True)
-    # output = net(data)
+    data = torch.randn(1, 3, 16, 224, 224, requires_grad=True)
+    # net.eval()
+    output = net(data)
     # h, htail = net.forward_shared_block(data)
     # coords, heatmaps, probabilities = net.forward_coord_layers(htail)
     # output = net.forward_cls_layers(h)
    # torch.save({'state_dict': net.state_dict()}, './tmp.pth')
-    # print(len(output))
+    print(len(output))

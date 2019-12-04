@@ -40,8 +40,10 @@ def get_mtl_losses(targets, masks, outputs, coords, heatmaps, probabilities, obj
         hand_coord_losses.append(hand_coord_loss)
     object_losses = []
     if num_o_outputs > 0:
-        object_vector_loss = object_loss(targets,  objects, targets_start_from=targets_starting_point)
-        targets_starting_point += 352
+        # TODO: pass variable for single_object_layer implementation if I ever use it again
+        num_objects = len(objects)
+        object_vector_loss = object_loss(targets, objects, num_objects, targets_start_from=targets_starting_point, single_object_layer=False)
+        targets_starting_point += num_objects
         loss = loss + object_vector_loss
         object_losses.append(object_vector_loss)
     return loss, cls_losses, gaze_coord_losses, hand_coord_losses, object_losses

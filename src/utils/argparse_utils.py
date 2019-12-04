@@ -225,7 +225,7 @@ def parse_tasks_str(task_str, dataset_names):
 def parse_tasks_per_dataset(tasks_per_dataset):
     objectives_text = "Objectives: "
     num_coords = 0
-    num_objects = 0
+    num_objects = []
     num_classes = []
     num_cls_objectives = 0
     num_g_objectives = 0
@@ -256,9 +256,9 @@ def parse_tasks_per_dataset(tasks_per_dataset):
                 num_coords += 2
                 num_h_objectives += 1
             elif key == 'O':
-                objectives_text += "objects, "
+                objectives_text += "objects {}, ".format(value)
                 num_o_objectives += 1
-                num_objects += value
+                num_objects.append(value)
             else:
                 pass
             # and an if clause for every new type of task
