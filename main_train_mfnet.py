@@ -133,7 +133,7 @@ def main():
                 test(model_ft, ce_loss, train_iterator, tasks_per_dataset, epoch, "Train", log_file, args.gpus, use_flow=args.flow)
             new_top1 = test(model_ft, ce_loss, test_iterator, tasks_per_dataset, epoch, "Test", log_file, args.gpus, use_flow=args.flow)
             top1 = save_mt_checkpoints(model_ft, optimizer, top1, new_top1, args.save_all_weights, output_dir,
-                                       model_name, epoch, log_file)
+                                       model_name, epoch)
 
 
 if __name__ == '__main__':

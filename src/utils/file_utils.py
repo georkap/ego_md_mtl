@@ -16,6 +16,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 
 def init_folders(base_output_dir, model_name, resume, logging):
+    base_output_dir = os.path.normpath(base_output_dir)
     output_dir = os.path.join(base_output_dir, model_name)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -27,6 +28,7 @@ def init_folders(base_output_dir, model_name, resume, logging):
     return output_dir, log_file
 
 def print_and_save(text, path):
+    path = os.path.normpath(path)
     print(text)
     if path is not None:
         with open(path, 'a') as f:
@@ -162,7 +164,8 @@ def save_best_checkpoint(top1, new_top1, output_dir, model_name, weight_file):
     return top1
 
 
-def save_mt_checkpoints(model_ft, optimizer, top1, new_top1, save_all_weights, output_dir, model_name, epoch, log_file):
+def save_mt_checkpoints(model_ft, optimizer, top1, new_top1, save_all_weights, output_dir, model_name, epoch):
+    output_dir = os.path.normpath(output_dir)
     if save_all_weights:
         weight_file = os.path.join(output_dir, model_name + '_{:03d}.pth'.format(epoch))
     else:
@@ -185,8 +188,8 @@ def save_mt_checkpoints(model_ft, optimizer, top1, new_top1, save_all_weights, o
     return cur_top1s
 
 
-def save_checkpoints(model_ft, optimizer, top1, new_top1,
-                     save_all_weights, output_dir, model_name, epoch, log_file):
+def save_checkpoints(model_ft, optimizer, top1, new_top1, save_all_weights, output_dir, model_name, epoch, log_file):
+    output_dir = os.path.normpath(output_dir)
     if save_all_weights:
         weight_file = os.path.join(output_dir, model_name + '_{:03d}.pth'.format(epoch))
     else:
@@ -204,10 +207,8 @@ def save_checkpoints(model_ft, optimizer, top1, new_top1,
                     'optimizer': optimizer.state_dict(),
                     'top1_a': new_top1[0],
                     'top1_b': new_top1[1]}, weight_file)
-        top1_a = save_best_checkpoint(top1[0], new_top1[0], output_dir, 
-                                      model_name + "_verb", weight_file)
-        top1_b = save_best_checkpoint(top1[1], new_top1[1], output_dir, 
-                                      model_name + "_noun", weight_file)
+        top1_a = save_best_checkpoint(top1[0], new_top1[0], output_dir, model_name + "_verb", weight_file)
+        top1_b = save_best_checkpoint(top1[1], new_top1[1], output_dir, model_name + "_noun", weight_file)
         top1 = (top1_a, top1_b)
     return top1
 
@@ -221,6 +222,7 @@ def save_prev_checkpoint(pth_path):
     shutil.copyfile(pth_path, old_ckpt)
 
 def prepare_resume_latest(output_dir, model_name, resume_from):
+    output_dir = os.path.normpath(output_dir)
     old_ckpt_path = os.path.join(output_dir, model_name + '_ckpt.pth')
     save_prev_checkpoint(old_ckpt_path)
     old_best_path = os.path.join(output_dir, model_name + '_best.pth')
@@ -230,6 +232,7 @@ def prepare_resume_latest(output_dir, model_name, resume_from):
     return ckpt_path
 
 def load_checkpoint(ckpt_path, model_ft, optimizer):
+    ckpt_path = os.path.normpath(ckpt_path)
     checkpoint = torch.load(ckpt_path)
     model_ft.load_state_dict(checkpoint['state_dict'])
     if 'optimizer' in checkpoint:
@@ -237,6 +240,7 @@ def load_checkpoint(ckpt_path, model_ft, optimizer):
     return model_ft, optimizer
 
 def resume_checkpoint(model_ft, optimizer, output_dir, model_name, resume_from):
+    output_dir = os.path.normpath(output_dir)
     if resume_from in ["ckpt", "best"]: 
         # resume from ckpt or best and rename the previous weights
         ckpt_path = prepare_resume_latest(output_dir, model_name, resume_from)        
@@ -246,6 +250,7 @@ def resume_checkpoint(model_ft, optimizer, output_dir, model_name, resume_from):
     return load_checkpoint(ckpt_path, model_ft, optimizer), ckpt_path
 
 def get_log_files(log_dir, pattern, walk):
+    log_dir = os.path.normpath(log_dir)
     log_files = []
     if walk:
         for root, dirs, files in os.walk(log_dir):
@@ -272,7 +277,7 @@ def parse_log_file_name(name_parts):
     return batch_size, dropout, epochs, input_size, hidden_size, num_layers, seq_size, feature, lr_type, dataset
 
 def load_pretrained_weights(model_ft, args):
-    checkpoint = torch.load(args.pretrained_model_path)
+    checkpoint = torch.load(os.path.normpath(args.pretrained_model_path))
     # below line is needed if network is trained with DataParallel to remove 'module' prefix
     base_dict = {'.'.join(k.split('.')[1:]): v for k, v in list(checkpoint['state_dict'].items())}
     # remove classifiers from base dict

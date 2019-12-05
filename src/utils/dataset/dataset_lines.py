@@ -6,7 +6,7 @@ class DataLine(object):
 
     @property
     def data_path(self):
-        return self.data[0]
+        return os.path.normpath(self.data[0])
 
 
 class EPICDataLine(DataLine):
@@ -45,7 +45,7 @@ class EPICDataLine(DataLine):
         hand_track_path, gaze_track_path, obj_track_path = None, None, None
         if 'H' in dataset_info.td:
             use_hands = True
-            path_d, path_ds, a, b, c, pid, vid_id = self.data_path.split("\\")
+            path_d, path_ds, a, b, c, pid, vid_id = self.data_path.split("\\") # os.path.sep
             hand_track_path = os.path.join(path_d, path_ds, dataset_info.hand_list_prefix, pid, vid_id,
                                            "{}_{}_{}.pkl".format(start_frame, self.label_verb, self.label_noun))
         if 'O' in dataset_info.td:
@@ -130,7 +130,7 @@ class SOMETHINGV1DataLine(DataLine):
 
     def parse(self, dataset_info):
         start_frame = 1
-        frame_count = len(os.listdir(self.data_path))
+        frame_count = len(os.listdir(os.path.normpath(self.data_path)))
         assert frame_count > 0
         use_hands, use_gaze, use_objects = False, False, False
         hand_track_path, gaze_track_path, obj_track_path = None, None, None
