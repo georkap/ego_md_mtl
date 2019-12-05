@@ -1,0 +1,3 @@
+data\SOMETHINGV1\clips_frames\1 3 Stacking number of something
+data\SOMETHINGV1\clips_frames\2 51 Moving something down
+data\SOMETHINGV1\clips_frames\3 9 Folding something

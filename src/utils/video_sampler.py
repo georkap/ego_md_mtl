@@ -67,7 +67,7 @@ class RandomSampling(object):
         clip_end = clip_start + frame_range
         idxs = np.linspace(clip_start, clip_end, self.num).astype(dtype=np.int).tolist()
         for idx in idxs:
-            assert idx >=start_frame and idx <= start_frame+range_max
+            assert start_frame <= idx < start_frame + range_max
         return idxs
 
 
@@ -145,3 +145,16 @@ if __name__ == "__main__":
 #        # logging.info("{:d}: v_id = {}: {}".format(i, 1, sequential_sampler.sampling(range_max=9, v_id=1)))
 #        # logging.info("{:d}: v_id = {}: {}".format(i, 2, sequential_sampler.sampling(range_max=2, v_id=2)))
 #        # logging.info("{:d}: v_id = {}: {}".format(i, 3, sequential_sampler.sampling(range_max=3, v_id=3)))
+def prepare_sampler(sampler_type, clip_length, frame_interval):
+    if sampler_type == "train":
+        train_sampler = RandomSampling(num=clip_length,
+                                       interval=frame_interval,
+                                       speed=[0.5, 1.5], seed=None)
+        out_sampler = train_sampler
+    else:
+        val_sampler = SequentialSampling(num=clip_length,
+                                         interval=frame_interval,
+                                         fix_cursor=True,
+                                         shuffle=True, seed=None)
+        out_sampler = val_sampler
+    return out_sampler

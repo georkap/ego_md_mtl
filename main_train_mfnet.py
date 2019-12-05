@@ -8,8 +8,6 @@ main train mfnet
 """
 
 import torch
-from torch.optim import SGD
-from torch.nn import DataParallel
 from torch.utils.data import DataLoader
 import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
@@ -19,8 +17,9 @@ from src.models.mfnet_3d_slowfast import MFNET_3D_SF as MFNET_3D_SF
 from src.models.mfnet_3d_mo_mm import MFNET_3D_MO_MM as MFNET_3D_MO_MM
 from src.utils.argparse_utils import parse_args, parse_tasks_str, parse_tasks_per_dataset
 from src.utils.file_utils import print_and_save, save_mt_checkpoints, init_folders, resume_checkpoint, load_pretrained_weights
-from src.utils.dataset_loader import MultitaskDatasetLoader, prepare_sampler
-from src.utils.dataset_loader_utils import RandomScale, RandomCrop, RandomHorizontalFlip, RandomHLS, RandomHLS_2, ToTensorVid,\
+from src.utils.dataset.dataset_loader import MultitaskDatasetLoader
+from src.utils.video_sampler import prepare_sampler
+from src.utils.dataset.dataset_loader_transforms import RandomScale, RandomCrop, RandomHorizontalFlip, RandomHLS_2, ToTensorVid,\
     Normalize, Resize, CenterCrop, PredefinedHorizontalFlip
 from src.utils.train_utils import train_mfnet_mo, test_mfnet_mo
 from src.utils.lr_utils import load_lr_scheduler
