@@ -50,7 +50,7 @@ def parse_args_network(parser, net_type):
         parser.add_argument('--flow', default=False, action='store_true')
         parser.add_argument('--only_flow', default=False, action='store_true')
         parser.add_argument('--pretrained', default=False, action='store_true')
-        parser.add_argument('--pretrained_model_path', type=str, default=r"data\pretrained_models\MFNet3D_Kinetics-400_72.8.pth")
+        parser.add_argument('--pretrained_model_path', type=str, default=r"data/pretrained_models/MFNet3D_Kinetics-400_72.8.pth")
         parser.add_argument('--tasks', type=str, default='A106',
                             help="e.g. A106V19N53GH for all EGTEA tasks with all their classes. "
                                  "If '+' is in the string it will assume multitask for multiple datasets, the order of"

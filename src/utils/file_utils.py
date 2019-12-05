@@ -16,7 +16,6 @@ import pandas as pd
 from matplotlib import pyplot as plt
 
 def init_folders(base_output_dir, model_name, resume, logging):
-    base_output_dir = os.path.normpath(base_output_dir)
     output_dir = os.path.join(base_output_dir, model_name)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -277,7 +276,7 @@ def parse_log_file_name(name_parts):
     return batch_size, dropout, epochs, input_size, hidden_size, num_layers, seq_size, feature, lr_type, dataset
 
 def load_pretrained_weights(model_ft, args):
-    checkpoint = torch.load(os.path.normpath(args.pretrained_model_path))
+    checkpoint = torch.load(args.pretrained_model_path)
     # below line is needed if network is trained with DataParallel to remove 'module' prefix
     base_dict = {'.'.join(k.split('.')[1:]): v for k, v in list(checkpoint['state_dict'].items())}
     # remove classifiers from base dict
