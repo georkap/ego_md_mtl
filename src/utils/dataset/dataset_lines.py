@@ -42,7 +42,7 @@ class EPICDataLine(DataLine):
         uid = self.uid
         frame_count = self.num_frames
         start_frame = self.start_frame if self.start_frame != -1 else 0
-        use_hands, use_gaze, use_objects = False, False, False
+        use_hands, use_gaze, use_objects, use_categories = False, False, False, False
         hand_track_path, gaze_track_path, obj_track_path = None, None, None
         if 'H' in dataset_info.td:
             use_hands = True
@@ -54,7 +54,12 @@ class EPICDataLine(DataLine):
             path_d, path_ds, a, b, c, pid, vid_id = self.data_path.split(os.path.sep)
             obj_track_path = os.path.join(path_d, path_ds, dataset_info.object_list_prefix, pid, vid_id,
                                           "{}_{}_{}.pkl".format(start_frame, self.label_verb, self.label_noun))
-        return (self.data_path, uid), (start_frame, frame_count), (use_hands, use_gaze, use_objects), (hand_track_path, gaze_track_path, obj_track_path)
+        if 'C' in dataset_info.td:
+            use_categories = True
+            path_d, path_ds, a, b, c, pid, vid_id = self.data_path.split(os.path.sep)
+            obj_track_path = os.path.join(path_d, path_ds, dataset_info.object_list_prefix, pid, vid_id,
+                                          "{}_{}_{}.pkl".format(start_frame, self.label_verb, self.label_noun))
+        return (self.data_path, uid), (start_frame, frame_count), (use_hands, use_gaze, use_objects, use_categories), (hand_track_path, gaze_track_path, obj_track_path)
 
 
 class GTEADataLine(DataLine):
@@ -99,7 +104,7 @@ class GTEADataLine(DataLine):
         uid = instance_name
         frame_count = len(os.listdir(path))
         assert frame_count > 0
-        use_hands, use_gaze, use_objects = False, False, False
+        use_hands, use_gaze, use_objects, use_categories = False, False, False, False
         hand_track_path, gaze_track_path, obj_track_path = None, None, None
         start_frame = 0
         if 'H' in dataset_info.td:
@@ -108,7 +113,7 @@ class GTEADataLine(DataLine):
         if 'G' in dataset_info.td:
             use_gaze = True
             gaze_track_path = os.path.join(base_path, dataset_info.gaze_list_prefix, instance_name + '.pkl')
-        return (path, uid), (start_frame, frame_count), (use_hands, use_gaze, use_objects), (hand_track_path, gaze_track_path, obj_track_path)
+        return (path, uid), (start_frame, frame_count), (use_hands, use_gaze, use_objects, use_categories), (hand_track_path, gaze_track_path, obj_track_path)
 
 class SOMETHINGV1DataLine(DataLine):
     def __init__(self, row):
@@ -133,10 +138,10 @@ class SOMETHINGV1DataLine(DataLine):
         start_frame = 1
         frame_count = len(os.listdir(self.data_path))
         assert frame_count > 0
-        use_hands, use_gaze, use_objects = False, False, False
+        use_hands, use_gaze, use_objects, use_categories = False, False, False, False
         hand_track_path, gaze_track_path, obj_track_path = None, None, None
         if 'H' in dataset_info.td:
             use_hands = True
             hand_track_path = os.path.join(self.data_path.replace("clips_frames", dataset_info.hand_list_prefix), '.pkl')
 
-        return (self.data_path, self.uid), (start_frame, frame_count), (use_hands, use_gaze, use_objects), (hand_track_path, gaze_track_path, obj_track_path)
+        return (self.data_path, self.uid), (start_frame, frame_count), (use_hands, use_gaze, use_objects, use_categories), (hand_track_path, gaze_track_path, obj_track_path)

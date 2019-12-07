@@ -322,23 +322,22 @@ class RandomHLS_2(object):
         num_ims = c//3
 
         random_vars = tuple(int(round(self.rng.uniform(-x, x))) for x in (self.vars + [0]))
-        # random_vars = (15, 35, 25, 0)
-        # self.random_vars = random_vars
-        augmented_data = np.zeros(data.shape, dtype=np.uint8)
+        augmented_data = np.zeros((c, h, w), dtype=np.uint8)
 
+        data1 = data.transpose((2, 0, 1)) # data from [h, w, c] -> [c, h, w] for faster access
         # t0 = time.time()
         for i_im in range(0, num_ims): # for every image do the magic
             start, end = 3*i_im, 3*(i_im+1)
-            augmented_data[:, :, start:end] = cv2.cvtColor(data[:, :, start:end], cv2.COLOR_RGB2HLS)
-            augmented_data[:, :, start:end] = cv2.add(augmented_data[:, :, start:end], random_vars, dtype=cv2.CV_8UC3)
-            mask = cv2.inRange(augmented_data[:, :, start], 0, 180)
-            augmented_data[mask == 0, start] = 180
-            augmented_data[:, :, start:end] = cv2.cvtColor(augmented_data[:, :, start:end], cv2.COLOR_HLS2RGB)
+            au = cv2.cvtColor(data1[start:end].transpose((1, 2, 0)), cv2.COLOR_RGB2HLS) # au in [h, w, c] to make transforms work properly
+            au = cv2.add(au, random_vars, dtype=cv2.CV_8UC3)
+            mask = cv2.inRange(au[:,:,0], 0, 180)
+            au[mask == 0, 0] = 180 # au[mask == 0, start] = 180
+            augmented_data[start:end, :,:] = cv2.cvtColor(au, cv2.COLOR_HLS2RGB).transpose((2, 0, 1))
         # t1 = time.time()
 
         # self.time_rgb2hls += t1-t0
 
-        return augmented_data
+        return augmented_data.transpose((1, 2, 0))
 
 class RandomHLS(object):
     def __init__(self, vars=[15, 35, 25]):

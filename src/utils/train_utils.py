@@ -45,7 +45,7 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
 
 
 def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_dataset, cur_epoch, log_file, gpus,
-                   lr_scheduler=None, moo=False, use_flow=False):
+                   lr_scheduler=None, moo=False, use_flow=False, one_obj_layer=False):
     batch_time = AverageMeter()
     full_losses = AverageMeter()
     dataset_metrics = list()
@@ -55,11 +55,13 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
         num_g_tasks = dataset['num_g_tasks']
         num_h_tasks = dataset['num_h_tasks']
         num_o_tasks = dataset['num_o_tasks']
+        num_c_tasks = dataset['num_c_tasks']
         losses = AverageMeter()
         cls_loss_meters = [AverageMeter() for _ in range(num_cls_tasks)]
         losses_hands = [AverageMeter() for _ in range(num_h_tasks)]
         losses_gaze = [AverageMeter() for _ in range(num_g_tasks)]
         losses_objects = [AverageMeter() for _ in range(num_o_tasks)]
+        losses_obj_cat = [AverageMeter() for _ in range(num_c_tasks)]
         top1_meters = [AverageMeter() for _ in range(num_cls_tasks)]
         top5_meters = [AverageMeter() for _ in range(num_cls_tasks)]
         dataset_metrics[i]['losses'] = losses
@@ -67,6 +69,7 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
         dataset_metrics[i]['losses_hands'] = losses_hands
         dataset_metrics[i]['losses_gaze'] = losses_gaze
         dataset_metrics[i]['losses_objects'] = losses_objects
+        dataset_metrics[i]['losses_obj_cat'] = losses_obj_cat
         dataset_metrics[i]['top1_meters'] = top1_meters
         dataset_metrics[i]['top5_meters'] = top5_meters
 
@@ -102,27 +105,17 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
         for batch_ind, dataset_id in enumerate(dataset_ids):
             batch_ids_per_dataset[dataset_id].append(batch_ind)
 
-        # For single dataset only
-        # if moo:
-        #     loss, cls_losses, gaze_coord_losses, hand_coord_losses, outputs = \
-        #         multiobjective_gradient_optimization(model, optimizer, inputs, targets, num_outputs, tasks_per_dataset,
-        #                                              criterion)
-        # else:
-        #     outputs, coords, heatmaps = model(inputs)
-        #     loss, cls_losses, gaze_coord_losses, hand_coord_losses = get_mtl_losses(targets, outputs,
-        #                                                                             coords, heatmaps,
-        #                                                                             num_outputs, tasks_per_dataset,
-        #                                                                             criterion)
-
-        outputs, coords, heatmaps, probabilities, objects = model(inputs)
+        outputs, coords, heatmaps, probabilities, objects, obj_cat = model(inputs)
 
         outputs_per_dataset = []
         targets_per_dataset = []
         masks_per_dataset = []
         objects_per_dataset = []
+        obj_cat_per_dataset = []
         global_task_id = 0 # assign indices to keep track of the tasks because the model outputs come in a sequence
         global_coord_id = 0
         global_object_id = 0
+        global_obj_cat_id = 0
         full_loss = []
 # calculate losses for the tasks of each dataset individually
         for dataset_id in range(num_datasets):
@@ -130,6 +123,7 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
             num_g_tasks = tasks_per_dataset[dataset_id]['num_g_tasks']
             num_h_tasks = tasks_per_dataset[dataset_id]['num_h_tasks']
             num_o_tasks = tasks_per_dataset[dataset_id]['num_o_tasks']
+            num_c_tasks = tasks_per_dataset[dataset_id]['num_c_tasks']
             num_coord_tasks = num_g_tasks + 2 * num_h_tasks
 # needs transpose to get the first dim to be the task and the second dim to be the batch
             tmp_targets = targets[batch_ids_per_dataset[dataset_id]].cuda(gpus[0]).transpose(0, 1)
@@ -138,11 +132,13 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
             masks_per_dataset.append(tmp_masks)
             outputs_per_dataset.append([])
             objects_per_dataset.append([])
+            obj_cat_per_dataset.append([])
 # when a dataset does not have any representative samples in a batch
             if not len(tmp_targets[0]) > 0:
                 global_task_id += num_cls_tasks
                 global_coord_id += num_coord_tasks
                 global_object_id += num_o_tasks
+                global_obj_cat_id += num_c_tasks
                 continue
 # get model's outputs for the classification tasks for the current dataset
             for task_id in range(num_cls_tasks):
@@ -155,16 +151,39 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
                 hea = heatmaps[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id+num_coord_tasks, :]
                 # pro = probabilities[batch_ids_per_dataset[dataset_ids], :]
 # get model's outputs for the object classification tasks of the current dataset
+            counts = [None, None]
+            object_outputs = None
             if objects is not None:
-                for no in range(len(objects[global_object_id])):
-                    objects_per_dataset[dataset_id].append(objects[global_object_id][no][batch_ids_per_dataset[dataset_id], :])
-            loss, cls_losses, gaze_coord_losses, hand_coord_losses, object_losses = get_mtl_losses(
-                targets_per_dataset[dataset_id], masks_per_dataset[dataset_id], outputs_per_dataset[dataset_id],
-                coo, hea, pro, objects_per_dataset[dataset_id], (num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks),
-                criterion)
+                if one_obj_layer:
+                    object_outputs = objects[global_object_id][batch_ids_per_dataset[dataset_id]]
+                    counts[0] = object_outputs.shape[1]
+                else:
+                    for no in range(len(objects[global_object_id])):
+                        objects_per_dataset[dataset_id].append(objects[global_object_id][no][batch_ids_per_dataset[dataset_id], :])
+                    object_outputs = objects_per_dataset[dataset_id]
+                    counts[0] = len(object_outputs)
+            obj_cat_outputs = None
+            if obj_cat is not None:
+                if one_obj_layer:
+                    obj_cat_outputs = obj_cat[global_obj_cat_id][batch_ids_per_dataset[dataset_id]]
+                    counts[1] = obj_cat_outputs.shape[1]
+                else:
+                    for no in range(len(obj_cat[global_obj_cat_id])):
+                        obj_cat_per_dataset[dataset_id].append(obj_cat[global_obj_cat_id][no][batch_ids_per_dataset[dataset_id], :])
+                    obj_cat_outputs = obj_cat_per_dataset[dataset_id]
+                    counts[1] = len(obj_cat_outputs)
+
+            task_outputs = (outputs_per_dataset[dataset_id], coo, hea, pro, object_outputs, obj_cat_outputs)
+            task_sizes = (num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks, num_c_tasks)
+
+            loss, partial_losses = get_mtl_losses(targets_per_dataset[dataset_id], masks_per_dataset[dataset_id],
+                                                  task_outputs, task_sizes, criterion, one_obj_layer, counts)
+            cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses = partial_losses
+
             global_task_id += num_cls_tasks
             global_coord_id += num_coord_tasks
             global_object_id += num_o_tasks
+            global_obj_cat_id += num_c_tasks
             full_loss.append(loss)
 
             # loss.backward()
@@ -184,6 +203,8 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
                 dataset_metrics[dataset_id]['losses_hands'][i].update(hl.item(), dataset_batch_size)
             for i, ol in enumerate(object_losses):
                 dataset_metrics[dataset_id]['losses_objects'][i].update(ol.item(), dataset_batch_size)
+            for i, ol in enumerate(obj_cat_losses):
+                dataset_metrics[dataset_id]['losses_obj_cat'][i].update(ol.item(), dataset_batch_size)
 
         # compute gradients and backward
         full_loss = sum(full_loss)
@@ -202,11 +223,13 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
             num_g_tasks = tasks_per_dataset[dataset_id]['num_g_tasks']
             num_h_tasks = tasks_per_dataset[dataset_id]['num_h_tasks']
             num_o_tasks = tasks_per_dataset[dataset_id]['num_o_tasks']
+            num_c_tasks = tasks_per_dataset[dataset_id]['num_c_tasks']
 
             losses = dataset_metrics[dataset_id]['losses']
             losses_gaze = dataset_metrics[dataset_id]['losses_gaze']
             losses_hands = dataset_metrics[dataset_id]['losses_hands']
             losses_objects = dataset_metrics[dataset_id]['losses_objects']
+            losses_obj_cat = dataset_metrics[dataset_id]['losses_obj_cat']
             cls_loss_meters = dataset_metrics[dataset_id]['cls_loss_meters']
             top1_meters = dataset_metrics[dataset_id]['top1_meters']
             top5_meters = dataset_metrics[dataset_id]['top5_meters']
@@ -219,6 +242,8 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
                 to_print += '[l_gcoo_{} {:.4f}[avg:{:.4f}], '.format(ind, losses_gaze[ind].val, losses_gaze[ind].avg)
             for ind in range(num_o_tasks):
                 to_print += '[l_obj_{} {:.4f}[avg:{:.4f}], '.format(ind, losses_objects[ind].val, losses_objects[ind].avg)
+            for ind in range(num_c_tasks):
+                to_print += '[l_obj_cat_{} {:.4f}[avg:{:.4f}], '.format(ind, losses_obj_cat[ind].val, losses_obj_cat[ind].avg)
             for ind in range(num_cls_tasks):
                 if ind == 0:
                     to_print += '\n\t\t'
@@ -232,7 +257,8 @@ def train_mfnet_mo(model, optimizer, criterion, train_iterator, tasks_per_datase
 
     print_and_save("Epoch train time: {}".format(batch_time.sum), log_file)
 
-def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch, dataset, log_file, gpus, use_flow=False):
+def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch, dataset, log_file, gpus,
+                  use_flow=False, one_obj_layer=False):
     dataset_metrics = list()
     for i, dat in enumerate(tasks_per_dataset):
         dataset_metrics.append(dict())
@@ -266,20 +292,23 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
             for batch_ind, dataset_id in enumerate(dataset_ids):
                 batch_ids_per_dataset[dataset_id].append(batch_ind)
 
-            outputs, coords, heatmaps, probabilities, objects = model(inputs)
+            outputs, coords, heatmaps, probabilities, objects, obj_cat = model(inputs)
 
             outputs_per_dataset = []
             targets_per_dataset = []
             masks_per_dataset = []
             objects_per_dataset = []
+            obj_cat_per_dataset = []
             global_task_id = 0
             global_coord_id = 0
             global_object_id = 0
+            global_obj_cat_id = 0
             for dataset_id in range(num_datasets):
                 num_cls_tasks = tasks_per_dataset[dataset_id]['num_cls_tasks']
                 num_g_tasks = tasks_per_dataset[dataset_id]['num_g_tasks']
                 num_h_tasks = tasks_per_dataset[dataset_id]['num_h_tasks']
                 num_o_tasks = tasks_per_dataset[dataset_id]['num_o_tasks']
+                num_c_tasks = tasks_per_dataset[dataset_id]['num_c_tasks']
                 num_coord_tasks = num_g_tasks + 2 * num_h_tasks
                 tmp_targets = targets[batch_ids_per_dataset[dataset_id]].cuda(gpus[0]).transpose(0, 1)
                 tmp_masks = masks[batch_ids_per_dataset[dataset_id]].cuda(gpus[0])
@@ -287,6 +316,7 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
                 masks_per_dataset.append(tmp_masks)
                 outputs_per_dataset.append([])
                 objects_per_dataset.append([])
+                obj_cat_per_dataset.append([])
                 if not len(tmp_targets[0]) > 0:
                     global_task_id += num_cls_tasks
                     global_coord_id += num_coord_tasks
@@ -300,17 +330,41 @@ def test_mfnet_mo(model, criterion, test_iterator, tasks_per_dataset, cur_epoch,
                     coo = coords[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id + num_coord_tasks, :]
                     hea = heatmaps[batch_ids_per_dataset[dataset_id], :, global_coord_id:global_coord_id + num_coord_tasks, :]
                     # pro = probabilities[batch_ids_per_dataset[dataset_ids], :]
+                counts = [None, None]
+                object_outputs = None
                 if objects is not None:
-                    for no in range(len(objects[global_object_id])):
-                        objects_per_dataset[dataset_id].append(
-                            objects[global_object_id][no][batch_ids_per_dataset[dataset_id], :])
-                loss, cls_losses, gaze_coord_losses, hand_coord_losses, object_losses = get_mtl_losses(
-                    targets_per_dataset[dataset_id], masks_per_dataset[dataset_id], outputs_per_dataset[dataset_id],
-                    coo, hea, pro, objects_per_dataset[dataset_id], (num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks), criterion)
+                    if one_obj_layer:
+                        object_outputs = objects[global_object_id][batch_ids_per_dataset[dataset_id]]
+                        counts[0] = object_outputs.shape[1]
+                    else:
+                        for no in range(len(objects[global_object_id])):
+                            objects_per_dataset[dataset_id].append(
+                                objects[global_object_id][no][batch_ids_per_dataset[dataset_id], :])
+                        object_outputs = objects_per_dataset[dataset_id]
+                        counts[0] = len(object_outputs)
+                obj_cat_outputs = None
+                if obj_cat is not None:
+                    if one_obj_layer:
+                        obj_cat_outputs = obj_cat[global_obj_cat_id][batch_ids_per_dataset[dataset_id]]
+                        counts[1] = obj_cat_outputs.shape[1]
+                    else:
+                        for no in range(len(obj_cat[global_obj_cat_id])):
+                            obj_cat_per_dataset[dataset_id].append(
+                                obj_cat[global_obj_cat_id][no][batch_ids_per_dataset[dataset_id], :])
+                        obj_cat_outputs = obj_cat_per_dataset[dataset_id]
+                        counts[1] = len(obj_cat_outputs)
+
+                task_outputs = (outputs_per_dataset[dataset_id], coo, hea, pro, object_outputs, obj_cat_outputs)
+                task_sizes = (num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks, num_c_tasks)
+
+                loss, partial_losses = get_mtl_losses(targets_per_dataset[dataset_id], masks_per_dataset[dataset_id],
+                                                      task_outputs, task_sizes, criterion, one_obj_layer, counts)
+                cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses = partial_losses
 
                 global_task_id += num_cls_tasks
                 global_coord_id += num_coord_tasks
                 global_object_id += num_o_tasks
+                global_obj_cat_id += num_c_tasks
 
                 # update metrics
                 dataset_batch_size = len(batch_ids_per_dataset[dataset_id])
@@ -459,12 +513,13 @@ def validate_mfnet_mo_json(model, test_iterator, dataset, action_file):
 
     return json_outputs
 
-def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, cur_epoch, dataset, log_file, use_flow=False):
-    num_cls_outputs, num_g_outputs, num_h_outputs, num_o_outputs = num_outputs
+def validate_mfnet_mo(model, criterion, test_iterator, task_sizes, cur_epoch, dataset, log_file, use_flow=False,
+                      one_obj_layer=False):
+    num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks, num_c_tasks = task_sizes
     losses = AverageMeter()
-    top1_meters = [AverageMeter() for _ in range(num_cls_outputs)]
-    top5_meters = [AverageMeter() for _ in range(num_cls_outputs)]
-    task_outputs = [[] for _ in range(num_cls_outputs)]
+    top1_meters = [AverageMeter() for _ in range(num_cls_tasks)]
+    top5_meters = [AverageMeter() for _ in range(num_cls_tasks)]
+    task_outputs = [[] for _ in range(num_cls_tasks)]
 
     print_and_save('Evaluating after epoch: {} on {} set'.format(cur_epoch, dataset), log_file)
     with torch.no_grad():
@@ -480,19 +535,20 @@ def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, cur_epoch, d
                 inputs, targets, masks, video_names = data
                 inputs = inputs.cuda()
 
-            outputs, coords, heatmaps, probabilities, objects = model(inputs)
+            outputs, coords, heatmaps, probabilities, objects, obj_cat = model(inputs)
             targets = targets.cuda().transpose(0, 1)
             masks = masks.cuda()
 
-            loss, cls_losses, gaze_coord_losses, hand_coord_losses, object_losses = get_mtl_losses(
-                targets, masks, outputs, coords, heatmaps, probabilities, objects, num_outputs, criterion)
+            task_outputs = (outputs, coords, heatmaps, probabilities, objects, obj_cat)
+            loss, partial_losses = get_mtl_losses(targets, masks, task_outputs, task_sizes, criterion, one_obj_layer)
+            cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses = partial_losses
 
             batch_size = outputs[0].size(0)
 
             batch_preds = []
             for j in range(batch_size):
                 txt_batch_preds = "{}".format(video_names[j])
-                for ind in range(num_cls_outputs):
+                for ind in range(num_cls_tasks):
                     txt_batch_preds += ", "
                     res = np.argmax(outputs[ind][j].detach().cpu().numpy())
                     label = targets[ind][j].detach().cpu().numpy()
@@ -501,13 +557,13 @@ def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, cur_epoch, d
                 batch_preds.append(txt_batch_preds)
 
             losses.update(loss.item(), batch_size)
-            for ind in range(num_cls_outputs):
+            for ind in range(num_cls_tasks):
                 t1, t5 = accuracy(outputs[ind].detach().cpu(), targets[ind].detach().cpu().long(), topk=(1, 5))
                 top1_meters[ind].update(t1.item(), batch_size)
                 top5_meters[ind].update(t5.item(), batch_size)
 
             to_print = '[Batch {}/{}]'.format(batch_idx, len(test_iterator))
-            for ind in range(num_cls_outputs):
+            for ind in range(num_cls_tasks):
                 to_print += '[T{}::Top1 {:.3f}[avg:{:.3f}], Top5 {:.3f}[avg:{:.3f}]],'.format(ind, top1_meters[ind].val,
                                                                                               top1_meters[ind].avg,
                                                                                               top5_meters[ind].val,
@@ -516,7 +572,7 @@ def validate_mfnet_mo(model, criterion, test_iterator, num_outputs, cur_epoch, d
             print_and_save(to_print, log_file)
 
         to_print = '{} Results: Loss {:.3f}'.format(dataset, losses.avg)
-        for ind in range(num_cls_outputs):
+        for ind in range(num_cls_tasks):
             to_print += ', T{}::Top1 {:.3f}, Top5 {:.3f}'.format(ind, top1_meters[ind].avg, top5_meters[ind].avg)
         print_and_save(to_print, log_file)
     return [tasktop1.avg for tasktop1 in top1_meters], task_outputs

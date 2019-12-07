@@ -5,8 +5,9 @@ from src.losses.object_loss import object_loss
 from src.losses.min_norm_solvers import MinNormSolver, gradient_normalizers
 
 
-def get_mtl_losses(targets, masks, outputs, coords, heatmaps, probabilities, objects, num_outputs, criterion):
-    num_cls_outputs, num_g_outputs, num_h_outputs, num_o_outputs = num_outputs
+def get_mtl_losses(targets, masks, task_outputs, task_sizes, criterion, one_obj_layer, counts):
+    outputs, coords, heatmaps, probabilities, objects, obj_cat = task_outputs
+    num_cls_outputs, num_g_outputs, num_h_outputs, num_o_outputs, num_c_outputs = task_sizes
     targets_starting_point = num_cls_outputs
     masks_starting_point = 0
     slice_from = 0
@@ -38,15 +39,23 @@ def get_mtl_losses(targets, masks, outputs, coords, heatmaps, probabilities, obj
         slice_from += 2
         loss = loss + hand_coord_loss
         hand_coord_losses.append(hand_coord_loss)
-    object_losses = []
+    object_losses, obj_cat_losses = [], []
     if num_o_outputs > 0:
-        # TODO: pass variable for single_object_layer implementation if I ever use it again
-        num_objects = len(objects)
-        object_vector_loss = object_loss(targets, objects, num_objects, targets_start_from=targets_starting_point, single_object_layer=False)
+        num_objects = counts[0]
+        object_vector_loss = object_loss(targets, objects, num_objects, targets_start_from=targets_starting_point,
+                                         single_object_layer=one_obj_layer)
         targets_starting_point += num_objects
         loss = loss + object_vector_loss
         object_losses.append(object_vector_loss)
-    return loss, cls_losses, gaze_coord_losses, hand_coord_losses, object_losses
+    if num_c_outputs > 0:
+        num_c_obj = counts[1]
+        obj_cat_vector_loss = object_loss(targets, obj_cat, num_c_obj, targets_start_from=targets_starting_point,
+                                         single_object_layer=one_obj_layer)
+        targets_starting_point += num_c_obj
+        loss = loss + obj_cat_vector_loss
+        obj_cat_losses.append(obj_cat_vector_loss)
+    partial_losses = cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses
+    return loss, partial_losses
 
 def _get_mtl_losses(targets, dataset_ids, outputs, coords, heatmaps, num_outputs, tasks_per_dataset, criterion):
     num_cls_outputs, num_g_outputs, num_h_outputs = num_outputs

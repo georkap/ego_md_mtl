@@ -54,7 +54,11 @@ def main():
         tasks_per_dataset = eval_tasks_per_dataset
         args.dataset = [args.eval_dataset]
 
-    objectives_text, num_objectives, num_classes, num_coords, num_objects = parse_tasks_per_dataset(tasks_per_dataset)
+    # objectives_text, num_objectives, num_classes, num_coords, num_objects = parse_tasks_per_dataset(tasks_per_dataset)
+    objectives_text, objectives, task_sizes = parse_tasks_per_dataset(tasks_per_dataset)
+    num_cls_objectives, num_g_objectives, num_h_objectives, num_o_objectives, num_c_objectives = objectives
+    num_classes, num_coords, num_objects, num_obj_cat = task_sizes
+
 
     output_dir = os.path.dirname(args.ckpt_path)
     log_file = make_log_file_name(output_dir, args)
@@ -95,8 +99,8 @@ def main():
 
     ce_loss = torch.nn.CrossEntropyLoss().cuda()
 
-    overall_top1 = [0]*num_objectives[0]
-    overall_mean_cls_acc = [0]*num_objectives[0]
+    overall_top1 = [0]*objectives[0]
+    overall_mean_cls_acc = [0]*objectives[0]
     for i in range(args.mfnet_eval):
         crop_type = CenterCrop((224, 224)) if args.eval_crop == 'center' else RandomCrop((224, 224))
         if args.eval_sampler == 'middle':
@@ -113,13 +117,14 @@ def main():
                                             batch_transform=val_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
                                             hand_list_prefix=args.hand_list_prefix[:],
                                             object_list_prefix=args.object_list_prefix[:],
+                                            object_categories=args.object_cats[:],
                                             validation=True,
                                             use_flow=args.flow, flow_transforms=val_transforms_flow)
         val_iter = torch.utils.data.DataLoader(val_loader, batch_size=args.batch_size, shuffle=False,
                                                num_workers=args.num_workers, pin_memory=True)
 
         # evaluate dataset
-        top1, outputs = validate(model_ft, ce_loss, val_iter, num_objectives, checkpoint['epoch'], args.dataset,
+        top1, outputs = validate(model_ft, ce_loss, val_iter, objectives, checkpoint['epoch'], args.dataset,
                                  log_file, args.flow)
 
         # calculate statistics

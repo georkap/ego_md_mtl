@@ -73,6 +73,7 @@ class MFNET_3D(nn.Module):
         self.num_classes = num_classes
         self.num_coords = kwargs.get('num_coords', 0)
         self.num_objects = kwargs.get('num_objects', None)
+        self.num_obj_cat = kwargs.get('num_obj_cat', None)
         self.one_object_layer = kwargs.get('one_object_layer', False)
         input_channels = kwargs.get('input_channels', 3)
         groups = 16
@@ -158,7 +159,10 @@ class MFNET_3D(nn.Module):
             for ii, no in enumerate(self.num_objects): # if there are more than one object presence layers, e.g. one per dataset
                 object_presence_layer = ObjectPresenceLayer(conv5_num_out, no, one_layer=self.one_object_layer)
                 self.add_module('object_presence_layer_{}'.format(ii), object_presence_layer)
-
+        if self.num_obj_cat:
+            for ii, no in enumerate(self.num_obj_cat):
+                object_presence_layer = ObjectPresenceLayer(conv5_num_out, no, one_layer=self.one_object_layer)
+                self.add_module('objcat_presence_layer_{}'.format(ii), object_presence_layer)
         #############
         # Initialization
         xavier(net=self)
@@ -194,8 +198,11 @@ class MFNET_3D(nn.Module):
             objects = None
             if self.num_objects:
                 objects = [self.__getattr__('object_presence_layer_{}'.format(ii))(h) for ii in range(len(self.num_objects))]
+            cat_obj = None
+            if self.num_obj_cat:
+                cat_obj = [self.__getattr__('objcat_presence_layer_{}'.format(ii))(h) for ii in range(len(self.num_obj_cat))]
+            return h_out, coords, heatmaps, probabilities, objects, cat_obj
 
-            return h_out, coords, heatmaps, probabilities, objects
         elif upto == 'shared':
             return self.forward_shared_block(x)
         elif upto == 'cls':
@@ -234,15 +241,22 @@ class MFNET_3D(nn.Module):
 
 
 if __name__ == "__main__":
-    import torch
+    import torch, time
     # ---------
-    kwargs = {'num_coords': 0, 'num_objects': [15]}
-    net = MFNET_3D(num_classes=[5], pretrained=False, **kwargs)
+    kwargs = {'num_coords': 3, 'num_objects': [352], 'num_obj_cat': [20], 'one_object_layer': False}
+    net = MFNET_3D(num_classes=[2513, 125, 352], pretrained=False, **kwargs)
     data = torch.randn(1, 3, 16, 224, 224, requires_grad=True)
+    net.cuda()
+    data = data.cuda()
     # net.eval()
-    output = net(data)
+    loss = torch.tensor([10]).cuda()
+    t0 = time.time()
+    for i in range(10):
+        output = net(data)
+    t1 = time.time()
+    print('forward time:', t1-t0)
     # h, htail = net.forward_shared_block(data)
     # coords, heatmaps, probabilities = net.forward_coord_layers(htail)
     # output = net.forward_cls_layers(h)
    # torch.save({'state_dict': net.state_dict()}, './tmp.pth')
-    print(len(output))
+   #  print(len(output))

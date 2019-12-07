@@ -1,9 +1,10 @@
 import numpy as np
-
+import pandas
 
 class DatasetInfo(object):
     def __init__(self, dataset_id, dataset_name, data_line, img_tmpl, tasks_for_dataset, cls_tasks, max_num_classes,
-                 gaze_list_prefix, hand_list_prefix, object_list_prefix, video_list, sub_with_flow):
+                 gaze_list_prefix, hand_list_prefix, object_list_prefix, object_categories_path, video_list,
+                 sub_with_flow):
         self.dataset_id = dataset_id
         self.dataset_name = dataset_name
         self.data_line = data_line
@@ -29,6 +30,10 @@ class DatasetInfo(object):
                     self.mappings.append(None)
             else:
                 self.mappings.append(None)
+
+        if object_categories_path is not None:
+            df_associations = pandas.read_csv(object_categories_path)
+            self.categories_per_noun = df_associations.category_id.values
 
 
 def make_class_mapping_generic(samples_list, attribute):

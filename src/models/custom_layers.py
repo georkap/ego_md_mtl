@@ -53,8 +53,9 @@ class ObjectPresenceLayer(nn.Module):
             h_out = self.object_classifier(h)
             if not self.training:
                 h_out = torch.sigmoid(h_out)
-        for i, cl in enumerate(self.object_classifier):
-            h_out.append(torch.sigmoid(cl(h)) if not self.training else cl(h))
+        else:
+            for i, cl in enumerate(self.object_classifier):
+                h_out.append(torch.sigmoid(cl(h)) if not self.training else cl(h))
         return h_out
 
 

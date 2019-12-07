@@ -33,6 +33,7 @@ def parse_args_dataset(parser, net_type):
     parser.add_argument('--gaze_list_prefix', type=str, default='', nargs='*')
     parser.add_argument('--hand_list_prefix', type=str, default='', nargs='*')
     parser.add_argument('--object_list_prefix', type=str, default='', nargs='*')
+    parser.add_argument('--object_cats', type=str, default='', nargs='*')
     parser.add_argument('--batch_size', type=int, default=1)
     if net_type in ['mfnet']:
         parser.add_argument('--clip_gradient', action='store_true')
@@ -49,6 +50,7 @@ def parse_args_network(parser, net_type):
         parser.add_argument('--sf', default=False, action='store_true')
         parser.add_argument('--flow', default=False, action='store_true')
         parser.add_argument('--only_flow', default=False, action='store_true')
+        parser.add_argument('--one_object_layer', default=False, action='store_true')
         parser.add_argument('--pretrained', default=False, action='store_true')
         parser.add_argument('--pretrained_model_path', type=str, default=r"data/pretrained_models/MFNet3D_Kinetics-400_72.8.pth")
         parser.add_argument('--tasks', type=str, default='A106',
@@ -198,10 +200,11 @@ def parse_tasks_str(task_str, dataset_names):
         num_g_tasks = 0
         num_h_tasks = 0
         num_o_tasks = 0
+        num_c_tasks = 0
         max_target_size = 0
         for t, cls in zip(tasks, classes):
             num_classes[t] = int(cls) if cls is not '' else None
-            if t not in ['G', 'H', 'O']: # expand with other non classification tasks as necessary
+            if t not in ['G', 'H', 'O', 'C']: # expand with other non classification tasks as necessary
                 num_cls_tasks += 1
                 max_target_size += 1
             if t == 'G':
@@ -212,11 +215,16 @@ def parse_tasks_str(task_str, dataset_names):
                 max_target_size += 32
             if t == 'O':
                 num_o_tasks += 1
-                max_target_size += 352
+                max_target_size += int(cls)
+            if t == 'C':
+                num_c_tasks += 1
+                max_target_size += int(cls)
+
         num_classes['num_cls_tasks'] = num_cls_tasks
         num_classes['num_g_tasks'] = num_g_tasks
         num_classes['num_h_tasks'] = num_h_tasks
         num_classes['num_o_tasks'] = num_o_tasks
+        num_classes['num_c_tasks'] = num_c_tasks
         num_classes['max_target_size'] = max_target_size
         num_classes['dataset'] = dataset_name
         tasks_per_dataset.append(num_classes)
@@ -227,10 +235,12 @@ def parse_tasks_per_dataset(tasks_per_dataset):
     num_coords = 0
     num_objects = []
     num_classes = []
+    num_obj_cat = []
     num_cls_objectives = 0
     num_g_objectives = 0
     num_h_objectives = 0
     num_o_objectives = 0
+    num_c_objectives = 0
     for i, td in enumerate(tasks_per_dataset):
         # parse the dictionary with the tasks
         objectives_text += "\nDataset {}\n".format(i)
@@ -259,10 +269,16 @@ def parse_tasks_per_dataset(tasks_per_dataset):
                 objectives_text += "objects {}, ".format(value)
                 num_o_objectives += 1
                 num_objects.append(value)
+            elif key == 'C':
+                objectives_text += "object categories {}, ".format(value)
+                num_c_objectives += 1
+                num_obj_cat.append(value)
             else:
                 pass
             # and an if clause for every new type of task
-    return objectives_text, (num_cls_objectives, num_g_objectives, num_h_objectives, num_o_objectives), num_classes, num_coords, num_objects
+    objectives = (num_cls_objectives, num_g_objectives, num_h_objectives, num_o_objectives, num_c_objectives)
+    task_sizes = (num_classes, num_coords, num_objects, num_obj_cat)
+    return objectives_text, objectives, task_sizes
 
 def compare_tasks_per_dataset(train_td, eval_td):
     eval_dataset = eval_td[0]['dataset']

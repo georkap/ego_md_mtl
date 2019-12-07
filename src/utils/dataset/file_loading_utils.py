@@ -22,6 +22,23 @@ def load_images(data_path, frame_indices, image_tmpl):
         # images[i] = next_image
     return images
 
+def load_images2(data_path, frame_indices, image_tmpl, vis_data):
+    image = cv2.imread(os.path.join(data_path, image_tmpl.format(frame_indices[0])))
+    h, w, c = image.shape
+    images = np.zeros((c * len(frame_indices), h, w), dtype=np.uint8)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    images[:c, :, :] = image.transpose((2, 0, 1))
+    for i, f_ind in enumerate(frame_indices[1:]):
+        im_name = os.path.join(data_path, image_tmpl.format(f_ind))
+        image = cv2.imread(im_name, cv2.IMREAD_COLOR)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        images[(i+1)*c:(i+2)*c, :, :] = image.transpose((2, 0, 1))
+
+    images = images.transpose((1, 2, 0))
+    if vis_data:
+        return images, np.split(images, len(frame_indices), axis=2)
+    else:
+        return images, None
 
 def load_flow_clip(path, sampled_idxs, dataset_info, only_flow):
     sub_with_flow = dataset_info.sub_with_flow

@@ -29,11 +29,13 @@ from src.constants import *
 def main():
     args, model_name = parse_args('mfnet', val=False)
     tasks_per_dataset = parse_tasks_str(args.tasks, args.dataset)
-    objectives_text, num_objectives, num_classes, num_coords, num_objects = parse_tasks_per_dataset(tasks_per_dataset)
+    objectives_text, objectives, task_sizes = parse_tasks_per_dataset(tasks_per_dataset)
+    num_cls_objectives, num_g_objectives, num_h_objectives, num_o_objectives, num_c_objectives = objectives
+    num_classes, num_coords, num_objects, num_obj_cat = task_sizes
     output_dir, log_file = init_folders(args.base_output_dir, model_name, args.resume, args.logging)
     print_and_save(args, log_file)
     print_and_save("Model name: {}".format(model_name), log_file)
-    print_and_save("Training for {} objective(s)".format(sum(num_objectives)), log_file)
+    print_and_save("Training for {} objective(s)".format(sum(objectives)), log_file)
     print_and_save(objectives_text, log_file)
     cudnn.benchmark = True
 
@@ -42,7 +44,7 @@ def main():
         mfnet_3d = MFNET_3D_SF
     elif args.flow:
         mfnet_3d = MFNET_3D_MO_MM
-        kwargs['modalities'] = {'RGB':3, 'Flow':2}
+        kwargs['modalities'] = {'RGB': 3, 'Flow': 2}
     else:
         mfnet_3d = MFNET_3D_MO
         if args.only_flow:
@@ -50,6 +52,8 @@ def main():
 
     kwargs["num_coords"] = num_coords
     kwargs["num_objects"] = num_objects
+    kwargs["num_obj_cat"] = num_obj_cat
+    kwargs["one_object_layer"] = args.one_object_layer
     if args.long:
         kwargs["k_sec"] = {2: 3, 3: 4, 4: 11, 5: 3}
     model_ft = mfnet_3d(num_classes, dropout=args.dropout, **kwargs)
@@ -78,8 +82,7 @@ def main():
                                 lr=args.lr, momentum=args.momentum, weight_decay=args.decay, nesterov=True)
 
     if args.resume:
-        model_ft, optimizer, ckpt_path = resume_checkpoint(model_ft, optimizer, output_dir, model_name,
-                                                           args.resume_from)
+        model_ft, optimizer, ckpt_path = resume_checkpoint(model_ft, optimizer, output_dir, model_name, args.resume_from)
         print_and_save("Resuming training from: {}".format(ckpt_path), log_file)
 
     # load dataset and train and validation iterators
@@ -99,6 +102,7 @@ def main():
                                           batch_transform=train_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
                                           hand_list_prefix=args.hand_list_prefix[:],
                                           object_list_prefix=args.object_list_prefix[:],
+                                          object_categories=args.object_cats[:],
                                           use_flow=args.flow, flow_transforms=train_transforms_flow,
                                           only_flow=args.only_flow)
     train_iterator = torch.utils.data.DataLoader(train_loader, batch_size=args.batch_size, shuffle=True,
@@ -113,6 +117,7 @@ def main():
                                          batch_transform=test_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
                                          hand_list_prefix=args.hand_list_prefix[:],
                                          object_list_prefix=args.object_list_prefix[:],
+                                         object_categories=args.object_cats[:],
                                          use_flow=args.flow, flow_transforms=test_transforms_flow,
                                          only_flow=args.only_flow)
     test_iterator = torch.utils.data.DataLoader(test_loader, batch_size=args.batch_size, shuffle=False,
@@ -123,15 +128,17 @@ def main():
 
     train = train_mfnet_mo
     test = test_mfnet_mo
-    num_cls_tasks = num_objectives[0]
+    num_cls_tasks = objectives[0]
     new_top1, top1 = [0.0] * num_cls_tasks, [0.0] * num_cls_tasks
     for epoch in range(args.max_epochs):
         train(model_ft, optimizer, ce_loss, train_iterator, tasks_per_dataset, epoch, log_file, args.gpus, lr_scheduler,
-              moo=args.moo, use_flow=args.flow)
+              moo=args.moo, use_flow=args.flow, one_obj_layer=args.one_object_layer)
         if (epoch+1) % args.eval_freq == 0:
             if args.eval_on_train:
-                test(model_ft, ce_loss, train_iterator, tasks_per_dataset, epoch, "Train", log_file, args.gpus, use_flow=args.flow)
-            new_top1 = test(model_ft, ce_loss, test_iterator, tasks_per_dataset, epoch, "Test", log_file, args.gpus, use_flow=args.flow)
+                test(model_ft, ce_loss, train_iterator, tasks_per_dataset, epoch, "Train", log_file, args.gpus,
+                     use_flow=args.flow, one_obj_layer=args.one_object_layer)
+            new_top1 = test(model_ft, ce_loss, test_iterator, tasks_per_dataset, epoch, "Test", log_file, args.gpus,
+                            use_flow=args.flow, one_obj_layer=args.one_object_layer)
             top1 = save_mt_checkpoints(model_ft, optimizer, top1, new_top1, args.save_all_weights, output_dir,
                                        model_name, epoch)
 
