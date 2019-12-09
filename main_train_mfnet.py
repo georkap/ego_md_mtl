@@ -82,7 +82,7 @@ def main():
                                 lr=args.lr, momentum=args.momentum, weight_decay=args.decay, nesterov=True)
 
     if args.resume:
-        model_ft, optimizer, ckpt_path = resume_checkpoint(model_ft, optimizer, output_dir, model_name, args.resume_from)
+        (model_ft, optimizer), ckpt_path = resume_checkpoint(model_ft, optimizer, output_dir, model_name, args.resume_from)
         print_and_save("Resuming training from: {}".format(ckpt_path), log_file)
 
     # load dataset and train and validation iterators
