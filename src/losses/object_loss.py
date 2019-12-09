@@ -10,7 +10,7 @@ def object_loss(targets, objects, num_objects, targets_start_from, single_object
 
 
 def single_object_loss(objects, object_targets):
-    loss = F.binary_cross_entropy_with_logits(objects, object_targets, reduction='sum')
+    loss = F.binary_cross_entropy_with_logits(objects, object_targets.type(objects.dtype), reduction='sum')
     return loss
 
 def multiple_object_loss(objects, object_targets):
