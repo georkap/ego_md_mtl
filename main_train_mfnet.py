@@ -123,7 +123,6 @@ def main():
     test_iterator = torch.utils.data.DataLoader(test_loader, batch_size=args.batch_size, shuffle=False,
                                                 num_workers=args.num_workers, pin_memory=True)
 
-    ce_loss = torch.nn.CrossEntropyLoss().cuda(device=args.gpus[0])
     lr_scheduler = load_lr_scheduler(args.lr_type, args.lr_steps, optimizer, len(train_iterator))
 
     train = train_mfnet_mo
@@ -131,13 +130,13 @@ def main():
     num_cls_tasks = objectives[0]
     new_top1, top1 = [0.0] * num_cls_tasks, [0.0] * num_cls_tasks
     for epoch in range(args.max_epochs):
-        train(model_ft, optimizer, ce_loss, train_iterator, tasks_per_dataset, epoch, log_file, args.gpus, lr_scheduler,
+        train(model_ft, optimizer, train_iterator, tasks_per_dataset, epoch, log_file, args.gpus, lr_scheduler,
               moo=args.moo, use_flow=args.flow, one_obj_layer=args.one_object_layer)
         if (epoch+1) % args.eval_freq == 0:
             if args.eval_on_train:
-                test(model_ft, ce_loss, train_iterator, tasks_per_dataset, epoch, "Train", log_file, args.gpus,
+                test(model_ft, train_iterator, tasks_per_dataset, epoch, "Train", log_file, args.gpus,
                      use_flow=args.flow, one_obj_layer=args.one_object_layer)
-            new_top1 = test(model_ft, ce_loss, test_iterator, tasks_per_dataset, epoch, "Test", log_file, args.gpus,
+            new_top1 = test(model_ft, test_iterator, tasks_per_dataset, epoch, "Test", log_file, args.gpus,
                             use_flow=args.flow, one_obj_layer=args.one_object_layer)
             top1 = save_mt_checkpoints(model_ft, optimizer, top1, new_top1, args.save_all_weights, output_dir,
                                        model_name, epoch)

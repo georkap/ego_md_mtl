@@ -5,7 +5,7 @@ from src.losses.object_loss import object_loss
 from src.losses.min_norm_solvers import MinNormSolver, gradient_normalizers
 
 
-def get_mtl_losses(targets, masks, task_outputs, task_sizes, criterion, one_obj_layer, counts):
+def get_mtl_losses(targets, masks, task_outputs, task_sizes, one_obj_layer, counts, is_training=False):
     outputs, coords, heatmaps, probabilities, objects, obj_cat = task_outputs
     num_cls_outputs, num_g_outputs, num_h_outputs, num_o_outputs, num_c_outputs = task_sizes
     targets_starting_point = num_cls_outputs
@@ -15,7 +15,7 @@ def get_mtl_losses(targets, masks, task_outputs, task_sizes, criterion, one_obj_
     cls_losses = []
     assert len(cls_targets) == num_cls_outputs
     for output, target in zip(outputs, cls_targets):
-        loss_for_task = criterion(output, target)
+        loss_for_task = F.cross_entropy(output, target)
         cls_losses.append(loss_for_task)
     loss = sum(cls_losses)
     # finished with classification losses for any dataset
@@ -42,18 +42,23 @@ def get_mtl_losses(targets, masks, task_outputs, task_sizes, criterion, one_obj_
     object_losses, obj_cat_losses = [], []
     if num_o_outputs > 0:
         num_objects = counts[0]
-        object_vector_loss = object_loss(targets, objects, num_objects, targets_start_from=targets_starting_point,
-                                         single_object_layer=one_obj_layer)
+        object_vector_loss = object_loss(targets, masks, objects, num_objects, targets_start_from=targets_starting_point,
+                                         masks_start_from=masks_starting_point, single_object_layer=one_obj_layer,
+                                         is_training=is_training)
         targets_starting_point += num_objects
         loss = loss + object_vector_loss
         object_losses.append(object_vector_loss)
     if num_c_outputs > 0:
         num_c_obj = counts[1]
-        obj_cat_vector_loss = object_loss(targets, obj_cat, num_c_obj, targets_start_from=targets_starting_point,
-                                         single_object_layer=one_obj_layer)
+        obj_cat_vector_loss = object_loss(targets, masks, obj_cat, num_c_obj, targets_start_from=targets_starting_point,
+                                          masks_start_from=masks_starting_point, single_object_layer=one_obj_layer,
+                                          is_training=is_training)
         targets_starting_point += num_c_obj
         loss = loss + obj_cat_vector_loss
         obj_cat_losses.append(obj_cat_vector_loss)
+    if num_o_outputs > 0 or num_c_outputs > 0:
+        masks_starting_point += 1
+
     partial_losses = cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses
     return loss, partial_losses
 

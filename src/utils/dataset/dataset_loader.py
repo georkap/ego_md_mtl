@@ -191,6 +191,13 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
             ocpv = object_list_to_ocpv(object_detections, 20, categories)
         # ocpv_time += (time.time() - t)
 
+        if bpv is not None:
+            object_mask = [1] if bpv.max() != 0 else [0]
+        elif ocpv is not None:
+            object_mask = [1] if ocpv.max() != 0 else [0]
+        else:
+            object_mask = None
+
         # t = time.time()
         trns_norm_val = orig_norm_val
         if self.do_transforms:
@@ -304,6 +311,8 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
         if use_obj_categories:
             ocpv = ocpv.flatten()
             labels = np.concatenate((labels, ocpv))
+        if use_objects or use_obj_categories:
+            masks = np.concatenate((masks, object_mask)).astype(np.bool)
 
         # this is for the dataloader only, to avoid having uneven sizes in the label/mask dimension of the batch
         if len(labels) < self.maximum_target_size:
@@ -327,12 +336,12 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
             gaze_data = load_pickle(gaze_path)
             orig_gaze = np.array([[value[0], value[1]] for key, value in gaze_data.items()], dtype=np.float32).flatten()
             to_return = (clip_rgb, clip_flow, labels, dataset_id, orig_gaze, uid) if self.use_flow else (
-            clip_rgb, labels, dataset_id, orig_gaze, uid)
+                clip_rgb, labels, dataset_id, orig_gaze, uid)
         elif self.only_flow:
             to_return = (clip_flow, labels, masks, dataset_id)
         else:
             to_return = (clip_rgb, clip_flow, labels, masks, dataset_id) if self.use_flow else (
-            clip_rgb, labels, masks, dataset_id)
+                clip_rgb, labels, masks, dataset_id)
 
         return to_return
 
@@ -380,7 +389,7 @@ if __name__ == '__main__':
     #### tests
     # Note: before running tests put working directory as the "main" files
     # 1 test dataloader for epic kitchens
-    task_str = 'A2513V125N352HO352C20'  # "V125N352" # "A2513N352H" ok # "A2513V125N352H" ok # "V125N351" ok # "V125H" ok # "A2513V125N351H" ok  # "A2513V125N351GH" crashes due to 'G'
+    task_str = 'N352C20'  # "V125N352" # "A2513N352H" ok # "A2513V125N352H" ok # "V125N351" ok # "V125H" ok # "A2513V125N351H" ok  # "A2513V125N351GH" crashes due to 'G'
     datasets = ['epick']
     video_list_file = [r"other\splits\EPIC_KITCHENS\epic_rgb_new_nd_val_act\epic_rgb_new_val_1.txt"]
     _hlp = ['hand_detection_tracks_lr005_new']
@@ -449,15 +458,15 @@ if __name__ == '__main__':
     # print('time for augmentations', loader.transform.transforms[3].time_aug)
     # print('time for hls2rgb', loader.transform.transforms[3].time_hls2rgb)
     print('total time', t1 - t0)
-    print('sample time', sample_time)
-    print('rgb time', rgb_time)
-    print('indices time', indices_time)
-    print('hand tracks time', hand_track_time)
-    print('gaze tracks time', gaze_track_time)
-    print('bpv time', bpv_time)
-    print('ocpv time', ocpv_time)
-    print('transforms time', transforms_time)
-    print('... rgb time', rgb_transforms_time)
-    print('... tracks time', tracks_transform_time)
-    print('fin tracks time', fin_tracks_time)
-    print('labels time', labels_time)
+    # print('sample time', sample_time)
+    # print('rgb time', rgb_time)
+    # print('indices time', indices_time)
+    # print('hand tracks time', hand_track_time)
+    # print('gaze tracks time', gaze_track_time)
+    # print('bpv time', bpv_time)
+    # print('ocpv time', ocpv_time)
+    # print('transforms time', transforms_time)
+    # print('... rgb time', rgb_transforms_time)
+    # print('... tracks time', tracks_transform_time)
+    # print('fin tracks time', fin_tracks_time)
+    # print('labels time', labels_time)

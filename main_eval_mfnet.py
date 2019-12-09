@@ -77,6 +77,8 @@ def main():
 
     kwargs['num_coords'] = num_coords
     kwargs["num_objects"] = num_objects
+    kwargs["num_obj_cat"] = num_obj_cat
+    kwargs["one_object_layer"] = args.one_object_layer
     if args.long:
         kwargs["k_sec"] = {2: 3, 3: 4, 4: 11, 5: 3}
     model_ft = mfnet_3d(num_classes, **kwargs)
@@ -97,7 +99,7 @@ def main():
     model_ft.load_state_dict(checkpoint['state_dict'], strict=(args.eval_tasks is None))
     print_and_save("Model loaded on gpu {} devices".format(args.gpus), log_file)
 
-    ce_loss = torch.nn.CrossEntropyLoss().cuda()
+    # ce_loss = torch.nn.CrossEntropyLoss().cuda()
 
     overall_top1 = [0]*objectives[0]
     overall_mean_cls_acc = [0]*objectives[0]
@@ -124,8 +126,8 @@ def main():
                                                num_workers=args.num_workers, pin_memory=True)
 
         # evaluate dataset
-        top1, outputs = validate(model_ft, ce_loss, val_iter, objectives, checkpoint['epoch'], args.dataset,
-                                 log_file, args.flow)
+        top1, outputs = validate(model_ft, val_iter, objectives, checkpoint['epoch'], args.dataset, log_file, args.flow,
+                                 one_obj_layer=args.one_object_layer)
 
         # calculate statistics
         for ind in range(len(num_classes)):
