@@ -14,6 +14,70 @@ from src.utils.file_utils import print_and_save
 from src.utils.epic_eval_utils import get_manyhot_classes
 from src.constants import *
 
+def update_per_dataset_metrics(metrics, outputs_for_dat, targets_for_dat, dataset_loss,
+                               partial_task_losses, num_cls_tasks, dataset_batch_size, is_training):
+    cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses = partial_task_losses
+
+    metrics['losses'].update(dataset_loss.item(), dataset_batch_size)
+    for i in range(num_cls_tasks):
+        t1, t5 = accuracy(outputs_for_dat[i].detach().cpu(), targets_for_dat[i].detach().cpu().long(), topk=(1, 5))
+        metrics['top1_meters'][i].update(t1.item(), dataset_batch_size)
+        metrics['top5_meters'][i].update(t5.item(), dataset_batch_size)
+        if is_training:
+            metrics['cls_loss_meters'][i].update(cls_losses[i].item(), dataset_batch_size)
+    if is_training:
+        for i, gl in enumerate(gaze_coord_losses):
+            metrics['losses_gaze'][i].update(gl.item(), dataset_batch_size)
+        for i, hl in enumerate(hand_coord_losses):
+            metrics['losses_hands'][i].update(hl.item(), dataset_batch_size)
+        for i, ol in enumerate(object_losses):
+            metrics['losses_objects'][i].update(ol.item(), dataset_batch_size)
+        for i, ol in enumerate(obj_cat_losses):
+            metrics['losses_obj_cat'][i].update(ol.item(), dataset_batch_size)
+
+
+def init_test_metrics(tasks_per_dataset):
+    dataset_metrics = list()
+    for i, dat in enumerate(tasks_per_dataset):
+        dataset_metrics.append(dict())
+        num_cls_tasks = dat['num_cls_tasks']
+        losses = AverageMeter()
+        top1_meters = [AverageMeter() for _ in range(num_cls_tasks)]
+        top5_meters = [AverageMeter() for _ in range(num_cls_tasks)]
+        dataset_metrics[i]['losses'] = losses
+        dataset_metrics[i]['top1_meters'] = top1_meters
+        dataset_metrics[i]['top5_meters'] = top5_meters
+    return dataset_metrics
+
+def init_training_metrics(tasks_per_dataset):
+    batch_time = AverageMeter()
+    full_losses = AverageMeter()
+    dataset_metrics = list()
+    for i, dataset in enumerate(tasks_per_dataset):
+        dataset_metrics.append(dict())
+        num_cls_tasks = dataset['num_cls_tasks']
+        num_g_tasks = dataset['num_g_tasks']
+        num_h_tasks = dataset['num_h_tasks']
+        num_o_tasks = dataset['num_o_tasks']
+        num_c_tasks = dataset['num_c_tasks']
+        losses = AverageMeter()
+        cls_loss_meters = [AverageMeter() for _ in range(num_cls_tasks)]
+        losses_hands = [AverageMeter() for _ in range(num_h_tasks)]
+        losses_gaze = [AverageMeter() for _ in range(num_g_tasks)]
+        losses_objects = [AverageMeter() for _ in range(num_o_tasks)]
+        losses_obj_cat = [AverageMeter() for _ in range(num_c_tasks)]
+        top1_meters = [AverageMeter() for _ in range(num_cls_tasks)]
+        top5_meters = [AverageMeter() for _ in range(num_cls_tasks)]
+        dataset_metrics[i]['losses'] = losses
+        dataset_metrics[i]['cls_loss_meters'] = cls_loss_meters
+        dataset_metrics[i]['losses_hands'] = losses_hands
+        dataset_metrics[i]['losses_gaze'] = losses_gaze
+        dataset_metrics[i]['losses_objects'] = losses_objects
+        dataset_metrics[i]['losses_obj_cat'] = losses_obj_cat
+        dataset_metrics[i]['top1_meters'] = top1_meters
+        dataset_metrics[i]['top5_meters'] = top5_meters
+    return batch_time, full_losses, dataset_metrics
+
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""

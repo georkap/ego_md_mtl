@@ -81,6 +81,7 @@ def parse_args_training(parser):
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--decay', type=float, default=0.0005)  # decay for mfnet is 0.0001
     parser.add_argument('--max_epochs', type=int, default=20)
+    parser.add_argument('--grad_acc_batches', type=int, default=None)
     
     return parser
 

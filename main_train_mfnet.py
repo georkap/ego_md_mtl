@@ -131,7 +131,8 @@ def main():
     new_top1, top1 = [0.0] * num_cls_tasks, [0.0] * num_cls_tasks
     for epoch in range(args.max_epochs):
         train(model_ft, optimizer, train_iterator, tasks_per_dataset, epoch, log_file, args.gpus, lr_scheduler,
-              moo=args.moo, use_flow=args.flow, one_obj_layer=args.one_object_layer)
+              moo=args.moo, use_flow=args.flow, one_obj_layer=args.one_object_layer,
+              grad_acc_batches=args.grad_acc_batches)
         if (epoch+1) % args.eval_freq == 0:
             if args.eval_on_train:
                 test(model_ft, train_iterator, tasks_per_dataset, epoch, "Train", log_file, args.gpus,
