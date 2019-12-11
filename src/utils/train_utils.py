@@ -255,8 +255,6 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
 
     if grad_acc_batches is not None:
         num_aggregated_batches = 0
-        num_aggregated_samples = 0
-        grad_acc_loss = 0
         real_batch_idx = 0
 
     for batch_idx, data in enumerate(train_iterator):
@@ -266,7 +264,6 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
         inputs, targets, masks, dataset_ids, batch_ids_per_dataset = init_inputs_batch(
             data, tasks_per_dataset, use_flow, gpus[0])
 
-        batch_size = dataset_ids.shape[0]  # propagated batch size in any case
         if grad_acc_batches is not None:
             if num_aggregated_batches == 0:
                 optimizer.zero_grad()

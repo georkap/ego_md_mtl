@@ -13,6 +13,14 @@ def xavier(net):
             m.weight.data.fill_(1.0)
             if m.bias is not None:
                 m.bias.data.zero_()
+        elif classname.find('GroupNorm') != -1:
+            m.weight.data.fill_(1.0)
+            if m.bias is not None:
+                m.bias.data.zero_()
+        elif classname.find('InstanceNorm') != -1:
+            m.weight.data.fill_(1.0)
+            if m.bias is not None:
+                m.bias.data.zero_()
         elif classname.find('Linear') != -1:
             nn.init.xavier_uniform_(m.weight.data, gain=1.)
             if m.bias is not None:

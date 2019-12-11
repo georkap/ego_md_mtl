@@ -136,7 +136,7 @@ if __name__ == "__main__":
     """ test SequentialSampling() """
     for i in range(10):
         seq_samp = SequentialSampling(num=16, interval=2, fix_cursor=True, shuffle=True, seed=0)
-        logging.info("{:d}: v_id = {}: {}".format(i, i, seq_samp.sampling(range_max=312, v_id=1, start_frame=20668)))
+        logging.info("{:d}: v_id = {}: {}".format(i, i, seq_samp.sampling(range_max=1000, v_id=1, start_frame=100)))
 #    sequential_sampler = SequentialSampling(num=3, interval=3, fix_cursor=False)
 #
 #    logging.info("SequentialSampling():")
@@ -145,16 +145,18 @@ if __name__ == "__main__":
 #        # logging.info("{:d}: v_id = {}: {}".format(i, 1, sequential_sampler.sampling(range_max=9, v_id=1)))
 #        # logging.info("{:d}: v_id = {}: {}".format(i, 2, sequential_sampler.sampling(range_max=2, v_id=2)))
 #        # logging.info("{:d}: v_id = {}: {}".format(i, 3, sequential_sampler.sampling(range_max=3, v_id=3)))
-def prepare_sampler(sampler_type, clip_length, frame_interval):
+def prepare_sampler(sampler_type, clip_length, frame_interval, window=32):
     if sampler_type == "train":
         train_sampler = RandomSampling(num=clip_length,
                                        interval=frame_interval,
                                        speed=[0.5, 1.5], seed=None)
         out_sampler = train_sampler
-    else:
+    elif sampler_type == 'val':
         val_sampler = SequentialSampling(num=clip_length,
                                          interval=frame_interval,
                                          fix_cursor=True,
                                          shuffle=True, seed=None)
         out_sampler = val_sampler
+    else:
+        out_sampler = MiddleSampling(num=clip_length, window=window)
     return out_sampler

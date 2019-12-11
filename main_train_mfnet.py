@@ -108,7 +108,7 @@ def main():
     train_iterator = torch.utils.data.DataLoader(train_loader, batch_size=args.batch_size, shuffle=True,
                                                  num_workers=args.num_workers, pin_memory=True)
 
-    test_sampler = prepare_sampler("val", args.clip_length, args.frame_interval)
+    test_sampler = prepare_sampler(args.eval_sampler, args.clip_length, args.frame_interval, args.eval_window)
     test_transforms = transforms.Compose([Resize((256, 256), False), CenterCrop((224, 224)), ToTensorVid(),
                                           Normalize(mean=mean_3d, std=std_3d)])
     test_transforms_flow = transforms.Compose([Resize((256, 256), False), CenterCrop((224, 224)), ToTensorVid(dim=2),

@@ -91,8 +91,8 @@ def parse_args_eval(parser):
     parser.add_argument('--eval_freq', type=int, default=1)
     parser.add_argument('--eval_on_train', default=False, action='store_true')
     # Parameters for evaluation during testing
-    # mfnet
     parser.add_argument('--mfnet_eval', type=int, default=1)
+    # sampler and window apply to evaluation during training as well
     parser.add_argument('--eval_sampler', type=str, default='random', choices=['middle', 'random', 'doublefull'])
     parser.add_argument('--eval_crop', type=str, default='random', choices=['center', 'random'])
     # it is a good design choice during evaluation to use a temporal window for the video
