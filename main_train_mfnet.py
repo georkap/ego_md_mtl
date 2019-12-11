@@ -86,7 +86,7 @@ def main():
         print_and_save("Resuming training from: {}".format(ckpt_path), log_file)
 
     # load dataset and train and validation iterators
-    train_sampler = prepare_sampler("train", args.clip_length, args.frame_interval)
+    train_sampler = prepare_sampler("random", args.clip_length, args.frame_interval)
     train_transforms = transforms.Compose([
         RandomScale(make_square=True, aspect_ratio=[0.8, 1./0.8], slen=[224, 288]), RandomCrop((224, 224)),
         RandomHorizontalFlip(), RandomHLS_2(vars=[15, 35, 25]), ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])

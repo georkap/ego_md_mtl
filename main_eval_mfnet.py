@@ -99,8 +99,6 @@ def main():
     model_ft.load_state_dict(checkpoint['state_dict'], strict=(args.eval_tasks is None))
     print_and_save("Model loaded on gpu {} devices".format(args.gpus), log_file)
 
-    # ce_loss = torch.nn.CrossEntropyLoss().cuda()
-
     overall_top1 = [0]*objectives[0]
     overall_mean_cls_acc = [0]*objectives[0]
     for i in range(args.mfnet_eval):
