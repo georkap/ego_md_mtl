@@ -1,7 +1,7 @@
 from collections import OrderedDict
 import torch
 import torch.nn as nn
-from src.models.custom_layers import MultitaskClassifiers, BN_AC_CONV3D, MF_UNIT
+from src.models.layers import MultitaskClassifiers, BN_AC_CONV3D, MF_UNIT
 from src.utils.initializer import xavier
 
 class Modality_Block(nn.Module):

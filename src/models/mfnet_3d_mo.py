@@ -13,8 +13,9 @@ mo stands for multiple output
 from collections import OrderedDict
 import torch.nn as nn
 
-from src.models.custom_layers import CoordRegressionLayer, MultitaskClassifiers, ObjectPresenceLayer, MF_UNIT
+from src.models.layers import CoordRegressionLayer, MultitaskClassifiers, ObjectPresenceLayer, MF_UNIT
 from src.utils.initializer import xavier
+from torch.functional import F
 
 class MFNET_3D(nn.Module):
     def __init__(self, num_classes, dropout=None, **kwargs):
@@ -27,6 +28,9 @@ class MFNET_3D(nn.Module):
         self.num_obj_cat = kwargs.get('num_obj_cat', None)
         self.one_object_layer = kwargs.get('one_object_layer', False)
         self.norm = kwargs.get('norm', 'BN') # else 'GN' or 'IN'
+        self.ensemble_eval = kwargs.get('ensemble_eval', False)
+        self.t_dim_in = kwargs.get('num_frames', 16)
+        self.s_dim_in = kwargs.get('spatial_size', 224)
         input_channels = kwargs.get('input_channels', 3)
         groups = 16
         # k_sec = {2: 3, 3: 4, 4: 6, 5: 3}
@@ -113,13 +117,13 @@ class MFNET_3D(nn.Module):
         # final
         self.tail = nn.Sequential(OrderedDict([tailnorm, ('relu', nn.ReLU(inplace=True))]))
 
+        self.globalpool = nn.Sequential()
+        self.globalpool.add_module('avg', nn.AvgPool3d(kernel_size=(self.t_dim_in // 2, self.s_dim_in // 32,
+                                                                    self.s_dim_in // 32),
+                                                       stride=(1, 1, 1)))
+
         if dropout:
-            self.globalpool = nn.Sequential(
-                OrderedDict([('avg', nn.AvgPool3d(kernel_size=(8, 7, 7), stride=(1, 1, 1))),
-                             ('dropout', nn.Dropout(p=dropout))]))
-        else:
-            self.globalpool = nn.Sequential(
-                OrderedDict([('avg', nn.AvgPool3d(kernel_size=(8, 7, 7),  stride=(1, 1, 1)))]))
+            self.globalpool.add_module('dropout', nn.Dropout(p=dropout))
 
         self.classifier_list = MultitaskClassifiers(conv5_num_out, num_classes)
 
@@ -157,10 +161,13 @@ class MFNET_3D(nn.Module):
             if self.num_coords > 0:
                 coords, heatmaps, probabilities = self.coord_layers(h)
 
+            if not self.training and self.ensemble_eval:
+                h_ens = F.avg_pool3d(h, (1, self.s_dim_in//32, self.s_dim_in//32), (1, 1, 1))
+                h_ens = h_ens.view(h_ens.shape[0], h_ens.shape[1], -1)
+                h_ens = [self.classifier_list(h_ens[:, :, ii]) for ii in range(h_ens.shape[2])]
+
             h = self.globalpool(h)
-
             h = h.view(h.shape[0], -1)
-
             h_out = self.classifier_list(h)
 
             objects = None
@@ -169,7 +176,11 @@ class MFNET_3D(nn.Module):
             cat_obj = None
             if self.num_obj_cat:
                 cat_obj = [self.__getattr__('objcat_presence_layer_{}'.format(ii))(h) for ii in range(len(self.num_obj_cat))]
+            if not self.training and self.ensemble_eval:
+                return h_out, h_ens, coords, heatmaps, probabilities, objects, cat_obj
+
             return h_out, coords, heatmaps, probabilities, objects, cat_obj
+
 
         elif upto == 'shared':
             return self.forward_shared_block(x)
@@ -211,12 +222,13 @@ class MFNET_3D(nn.Module):
 if __name__ == "__main__":
     import torch, time
     # ---------
-    kwargs = {'num_coords': 3, 'num_objects': [352], 'num_obj_cat': [20], 'one_object_layer': True, 'norm':'IN'}
+    kwargs = {'num_coords': 0, 'num_objects': [352], 'num_obj_cat': None, 'one_object_layer': True,
+              'ensemble_eval': True}
     net = MFNET_3D(num_classes=[2513, 125, 352], pretrained=False, **kwargs)
     data = torch.randn(1, 3, 16, 224, 224, requires_grad=True)
     net.cuda()
     data = data.cuda()
-    # net.eval()
+    net.eval()
     loss = torch.tensor([10]).cuda()
     t0 = time.time()
     # for i in range(10):
