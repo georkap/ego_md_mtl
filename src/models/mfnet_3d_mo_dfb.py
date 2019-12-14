@@ -115,7 +115,7 @@ class MFNET_3D_DFB(nn.Module):
         if dropout:
             self.globalpool.add_module('dropout', nn.Dropout(p=dropout))
 
-        self.classifier_list = MultitaskClassifiers(conv5_num_out, num_classes)
+        # self.classifier_list = MultitaskClassifiers(conv5_num_out, num_classes)
         self.dfb_classifier_list = MultitaskDFBClassifiers(conv5_num_out, num_classes, pooling_kernel, dropout)
 
         # if self.num_objects:
@@ -157,9 +157,9 @@ class MFNET_3D_DFB(nn.Module):
         # h_ch, h_max = self.dfb_classifier_list(h)
         h_ch = self.dfb_classifier_list(h)
 
-        h = self.globalpool(h)
-        h = h.view(h.shape[0], -1)
-        h_out = self.classifier_list(h)
+        # h = self.globalpool(h)
+        # h = h.view(h.shape[0], -1)
+        # h_out = self.classifier_list(h)
 
         objects = None
         # if self.num_objects:
@@ -170,8 +170,8 @@ class MFNET_3D_DFB(nn.Module):
         # if not self.training and self.ensemble_eval:
         #     return h_out, h_ens, coords, heatmaps, probabilities, objects, cat_obj
         # h_out = [h_out, h_ch, h_max]
-        # h_out = h_ch
-        h_out = [out + ch for out, ch in zip(h_out, h_ch)]
+        h_out = h_ch
+        # h_out = [out + ch for out, ch in zip(h_out, h_ch)]
         return h_out, coords, heatmaps, probabilities, objects, cat_obj
 
 
