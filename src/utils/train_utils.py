@@ -43,8 +43,7 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
     y_b = y_b.to(torch.device("cuda:{}".format(0)))
     return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
-
-def init_inputs_batch(data, tasks_per_dataset, use_flow, base_gpu):
+def init_inputs(data, use_flow, base_gpu):
     if use_flow:
         rgb, flow, targets, masks, dataset_ids = data
         rgb = rgb.cuda(base_gpu)
@@ -53,6 +52,9 @@ def init_inputs_batch(data, tasks_per_dataset, use_flow, base_gpu):
     else:
         inputs, targets, masks, dataset_ids = data
         inputs = inputs.cuda(base_gpu)
+    return inputs, targets, masks, dataset_ids
+
+def init_batch(tasks_per_dataset, dataset_ids):
     # identify the dataset that the samples of the batch belong to
     batch_ids_per_dataset = []
     for dat in range(len(tasks_per_dataset)): # num_datasets = len(tasks_per_dataset)
@@ -60,7 +62,11 @@ def init_inputs_batch(data, tasks_per_dataset, use_flow, base_gpu):
         batch_ids_per_dataset.append(batch_ids)
     for batch_ind, dataset_id in enumerate(dataset_ids):
         batch_ids_per_dataset[dataset_id].append(batch_ind)
+    return batch_ids_per_dataset
 
+def init_inputs_batch(data, tasks_per_dataset, use_flow, base_gpu):
+    inputs, targets, masks, dataset_ids = init_inputs(data, use_flow, base_gpu)
+    batch_ids_per_dataset = init_batch(tasks_per_dataset, dataset_ids)
     return inputs, targets, masks, dataset_ids, batch_ids_per_dataset
 
 def update_metrics_per_dataset(dataset_metrics, outputs_per_dataset, targets_per_dataset, loss_per_dataset,
@@ -116,6 +122,11 @@ def calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, b
         # get model's outputs for the classification tasks for the current dataset
         for task_id in range(num_cls_tasks):
             tmp_outputs = outputs[global_task_id + task_id][batch_ids_per_dataset[dataset_id]]
+            # increase first dim of tmp_outputs to accomodate dfb model,
+            # also added dimension to the non-dfb models to facilite code in this stage
+            # tmp_outputs = []
+            # for o in outputs:
+            #     tmp_outputs.append(o[global_task_id + task_id][batch_ids_per_dataset[dataset_id]])
             outputs_per_dataset[dataset_id].append(tmp_outputs)
         # get model's outputs for the coord tasks of the current dataset
         coo, hea, pro = None, None, None
@@ -442,7 +453,8 @@ def validate_mfnet_mo_json(model, test_iterator, dataset, action_file):
 
     return json_outputs
 
-def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_file, use_flow=False, one_obj_layer=False):
+def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_file, use_flow=False, one_obj_layer=False,
+                      ensemble=False):
     num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks, num_c_tasks = task_sizes
     losses = AverageMeter()
     top1_meters = [AverageMeter() for _ in range(num_cls_tasks)]
@@ -454,16 +466,15 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
         model.eval()
         for batch_idx, data in enumerate(test_iterator):
 
-            if use_flow:
-                rgb, flow, targets, masks, video_names = data
-                rgb = rgb.cuda()
-                flow = flow.cuda()
-                inputs = [rgb, flow]
-            else:
-                inputs, targets, masks, video_names = data
-                inputs = inputs.cuda()
+            inputs, targets, masks, video_names = init_inputs(data, use_flow, None)
 
-            outputs, coords, heatmaps, probabilities, objects, obj_cat = model(inputs)
+            # outputs, coords, heatmaps, probabilities, objects, obj_cat = model(inputs)
+            network_output = model(inputs)
+            if ensemble:
+                outputs, outputs_e, coords, heatmaps, probabilities, objects, obj_cat = network_output
+            else:
+                outputs, coords, heatmaps, probabilities, objects, obj_cat = network_output
+
             targets = targets.cuda().transpose(0, 1)
             masks = masks.cuda()
 

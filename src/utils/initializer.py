@@ -25,8 +25,8 @@ def xavier(net):
             nn.init.xavier_uniform_(m.weight.data, gain=1.)
             if m.bias is not None:
                 m.bias.data.zero_()
-        elif classname in ['Sequential', 'AvgPool3d', 'MaxPool3d', 'Dropout', 'ReLU', 'Softmax', 'BnActConv3d'] or \
-                'Block' in classname:
+        elif classname in ['Sequential', 'AvgPool3d', 'AvgPool1d', 'MaxPool3d', 'Dropout', 'ReLU', 'Softmax',
+                           'BnActConv3d'] or 'Block' in classname:
             pass
         else:
             if classname != classname.upper():

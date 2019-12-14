@@ -101,6 +101,17 @@ class BN_AC_CONV3D(nn.Module):
         h = self.conv(h)
         return h
 
+def get_norm_layers(norm_type, conv1_num_out, conv5_num_out):
+    if norm_type == 'GN':
+        conv1normlayer = ('gn', nn.GroupNorm(num_groups=1, num_channels=conv1_num_out))
+        tailnorm = ('gn', nn.GroupNorm(num_groups=1, num_channels=conv5_num_out))
+    elif norm_type == 'IN':
+        conv1normlayer = ('in', nn.InstanceNorm3d(conv1_num_out))
+        tailnorm = ('in', nn.InstanceNorm3d(conv5_num_out))
+    else:
+        conv1normlayer = ('bn', nn.BatchNorm3d(conv1_num_out))
+        tailnorm = ('bn', nn.BatchNorm3d(conv5_num_out))
+    return conv1normlayer, tailnorm
 
 class MF_UNIT(nn.Module):
     def __init__(self, num_in, num_mid, num_out, g=1, stride=(1, 1, 1), first_block=False, use_3d=True, norm='BN'):
@@ -137,3 +148,50 @@ class MF_UNIT(nn.Module):
             x = self.conv_w1(x)
 
         return h + x
+
+class DiscriminativeFilterBankClassifier(nn.Module):
+    def __init__(self, num_in, num_out_classes, max_kernel, dropout, num_dc=5): # input should be Bx768x8x7x7
+        super(DiscriminativeFilterBankClassifier, self).__init__()
+        self.dfb = nn.Conv3d(in_channels=num_in, out_channels=num_out_classes*num_dc, kernel_size=(1,1,1), bias=False)
+        self.maxpool = nn.MaxPool3d(kernel_size=max_kernel, stride=(num_dc, 1, 1))
+        self.meanpool = nn.AvgPool1d(kernel_size=num_dc, stride=num_dc) # xchannel classifier output
+        # self.classifier_max = nn.Linear(num_out_classes*num_dc, num_out_classes) # max classifier output
+        self.num_out_classes = num_out_classes
+        if dropout:
+            self.add_module('dropout', nn.Dropout(p=dropout))
+
+    def forward(self, x):
+        x = self.dfb(x)
+        x = self.maxpool(x)
+
+        # if exists apply dropout before output layers
+        if hasattr(self, 'dropout'):
+            x = self.dropout(x)
+
+        # x_max = self.classifier_max(x.view(x.shape[0], -1)) # max classifier applied
+
+        x = self.meanpool(x.view(x.shape[0], self.num_out_classes, -1))
+        x_ch = x.view(x.shape[0], -1) # xchannel classifier applied
+
+        # return x_ch, x_max
+        return x_ch
+
+class MultitaskDFBClassifiers(nn.Module):
+    def __init__(self, last_conv_size, num_classes, max_kernel, dropout, num_dc=5):
+        super(MultitaskDFBClassifiers, self).__init__()
+        self.num_classes = [num_cls for num_cls in num_classes if num_cls > 0]
+        self.dfb_classifier_list = nn.ModuleList([
+            DiscriminativeFilterBankClassifier(last_conv_size, num_cls, max_kernel, dropout, num_dc)
+            for num_cls in self.num_classes])
+
+    def forward(self, h):
+        # h_ch, h_max = [], []
+        h_ch = []
+        for i, cl in enumerate(self.dfb_classifier_list):
+            # x_ch, x_max = cl(h)
+            x_ch = cl(h)
+            h_ch.append(x_ch)
+            # h_max.append(x_max)
+        # return h_ch, h_max
+        return h_ch
+

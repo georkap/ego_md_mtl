@@ -276,7 +276,8 @@ def parse_log_file_name(name_parts):
     return batch_size, dropout, epochs, input_size, hidden_size, num_layers, seq_size, feature, lr_type, dataset
 
 def load_pretrained_weights(model_ft, args):
-    checkpoint = torch.load(args.pretrained_model_path)
+    checkpoint = torch.load(args.pretrained_model_path, map_location={'cuda:0': 'cpu'})
+    # checkpoint = torch.load(args.pretrained_model_path)
     # below line is needed if network is trained with DataParallel to remove 'module' prefix
     base_dict = {'.'.join(k.split('.')[1:]): v for k, v in list(checkpoint['state_dict'].items())}
     # remove classifiers from base dict

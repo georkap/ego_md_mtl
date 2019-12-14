@@ -239,6 +239,7 @@ class MFNET_3D_MO_MM(nn.Module):
         h_out = self.classifier_list(x)
 
         coords, heatmaps, probabilities, objects = None, None, None, None
+        # return [h_out], coords, heatmaps, probabilities, objects
         return h_out, coords, heatmaps, probabilities, objects
 
 
