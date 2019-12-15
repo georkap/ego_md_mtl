@@ -8,6 +8,7 @@ calc_utils
 """
 
 import os
+import torch
 import numpy as np
 from sklearn.metrics import confusion_matrix
 from src.utils.file_utils import print_and_save
@@ -20,7 +21,13 @@ def update_per_dataset_metrics(metrics, outputs_for_dat, targets_for_dat, datase
 
     metrics['losses'].update(dataset_loss.item(), dataset_batch_size)
     for i in range(num_cls_tasks):
-        t1, t5 = accuracy(outputs_for_dat[i].detach().cpu(), targets_for_dat[i].detach().cpu().long(), topk=(1, 5))
+        if isinstance(outputs_for_dat[i], list):
+            sum_outputs = torch.zeros_like(outputs_for_dat[i][0])
+            for o in outputs_for_dat[i]:
+                sum_outputs += o
+            t1, t5 = accuracy(sum_outputs.detach().cpu(), targets_for_dat[i].detach().cpu().long(), topk=(1, 5))
+        else:
+            t1, t5 = accuracy(outputs_for_dat[i].detach().cpu(), targets_for_dat[i].detach().cpu().long(), topk=(1, 5))
         metrics['top1_meters'][i].update(t1.item(), dataset_batch_size)
         metrics['top5_meters'][i].update(t5.item(), dataset_batch_size)
         if is_training:

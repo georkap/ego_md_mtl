@@ -14,9 +14,19 @@ def get_mtl_losses(targets, masks, task_outputs, task_sizes, one_obj_layer, coun
     cls_targets = targets[:num_cls_outputs, :].long()
     cls_losses = []
     assert len(cls_targets) == num_cls_outputs
+
     for output, target in zip(outputs, cls_targets):
-        loss_for_task = F.cross_entropy(output, target)
-        cls_losses.append(loss_for_task)
+        if isinstance(output, list): # we are in the dfb case and we have multiple losses for each task
+            sum_outputs = torch.zeros_like(output[0])
+            for o in output: # 1. z_avg, 2. z_ch, z_max
+                z_loss = F.cross_entropy(o, target)
+                sum_outputs += o
+                cls_losses.append(z_loss)
+            z_loss = F.cross_entropy(sum_outputs, target)
+            cls_losses.append(z_loss)
+        else: # just the classical mtl classifier
+            loss_for_task = F.cross_entropy(output, target)
+            cls_losses.append(loss_for_task)
     loss = sum(cls_losses)
     # finished with classification losses for any dataset
 

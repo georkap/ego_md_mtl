@@ -169,9 +169,9 @@ class MFNET_3D_DFB(nn.Module):
         #     cat_obj = [self.__getattr__('objcat_presence_layer_{}'.format(ii))(h) for ii in range(len(self.num_obj_cat))]
         # if not self.training and self.ensemble_eval:
         #     return h_out, h_ens, coords, heatmaps, probabilities, objects, cat_obj
-        # h_out = [h_out, h_ch, h_max]
+        h_out = [h_out, h_ch, h_max]
         # h_out = h_ch
-        h_out = [out + ch + hmax for out, ch, hmax in zip(h_out, h_ch, h_max)]
+        # h_out = [out + ch + hmax for out, ch, hmax in zip(h_out, h_ch, h_max)]
         return h_out, coords, heatmaps, probabilities, objects, cat_obj
 
 

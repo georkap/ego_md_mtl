@@ -121,12 +121,12 @@ def calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, b
             continue
         # get model's outputs for the classification tasks for the current dataset
         for task_id in range(num_cls_tasks):
-            tmp_outputs = outputs[global_task_id + task_id][batch_ids_per_dataset[dataset_id]]
+            # tmp_outputs = outputs[global_task_id + task_id][batch_ids_per_dataset[dataset_id]]
             # increase first dim of tmp_outputs to accomodate dfb model,
             # also added dimension to the non-dfb models to facilite code in this stage
-            # tmp_outputs = []
-            # for o in outputs:
-            #     tmp_outputs.append(o[global_task_id + task_id][batch_ids_per_dataset[dataset_id]])
+            tmp_outputs = []
+            for o in outputs:
+                tmp_outputs.append(o[global_task_id + task_id][batch_ids_per_dataset[dataset_id]])
             outputs_per_dataset[dataset_id].append(tmp_outputs)
         # get model's outputs for the coord tasks of the current dataset
         coo, hea, pro = None, None, None
