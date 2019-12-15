@@ -189,7 +189,7 @@ class MultitaskDFBClassifiers(nn.Module):
         # h_ch = []
         for i, cl in enumerate(self.dfb_classifier_list):
             x_ch, x_max = cl(h)
-            x_ch = cl(h)
+            # x_ch = cl(h)
             h_ch.append(x_ch)
             h_max.append(x_max)
         return h_ch, h_max
