@@ -155,7 +155,7 @@ class DiscriminativeFilterBankClassifier(nn.Module):
         self.dfb = nn.Conv3d(in_channels=num_in, out_channels=num_out_classes*num_dc, kernel_size=(1,1,1), bias=False)
         self.maxpool = nn.MaxPool3d(kernel_size=max_kernel, stride=(num_dc, 1, 1))
         self.meanpool = nn.AvgPool1d(kernel_size=num_dc, stride=num_dc) # xchannel classifier output
-        # self.classifier_max = nn.Linear(num_out_classes*num_dc, num_out_classes) # max classifier output
+        self.classifier_max = nn.Linear(num_out_classes*num_dc, num_out_classes) # max classifier output
         self.num_out_classes = num_out_classes
         if dropout:
             self.add_module('dropout', nn.Dropout(p=dropout))
@@ -168,13 +168,13 @@ class DiscriminativeFilterBankClassifier(nn.Module):
         if hasattr(self, 'dropout'):
             x = self.dropout(x)
 
-        # x_max = self.classifier_max(x.view(x.shape[0], -1)) # max classifier applied
+        x_max = self.classifier_max(x.view(x.shape[0], -1)) # max classifier applied
 
         x = self.meanpool(x.view(x.shape[0], self.num_out_classes, -1))
         x_ch = x.view(x.shape[0], -1) # xchannel classifier applied
 
-        # return x_ch, x_max
-        return x_ch
+        return x_ch, x_max
+        # return x_ch
 
 class MultitaskDFBClassifiers(nn.Module):
     def __init__(self, last_conv_size, num_classes, max_kernel, dropout, num_dc=5):
@@ -185,13 +185,13 @@ class MultitaskDFBClassifiers(nn.Module):
             for num_cls in self.num_classes])
 
     def forward(self, h):
-        # h_ch, h_max = [], []
-        h_ch = []
+        h_ch, h_max = [], []
+        # h_ch = []
         for i, cl in enumerate(self.dfb_classifier_list):
-            # x_ch, x_max = cl(h)
+            x_ch, x_max = cl(h)
             x_ch = cl(h)
             h_ch.append(x_ch)
-            # h_max.append(x_max)
-        # return h_ch, h_max
-        return h_ch
+            h_max.append(x_max)
+        return h_ch, h_max
+        # return h_ch
 

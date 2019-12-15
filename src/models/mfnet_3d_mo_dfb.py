@@ -154,8 +154,8 @@ class MFNET_3D_DFB(nn.Module):
         #     h_ens = h_ens.view(h_ens.shape[0], h_ens.shape[1], -1)
         #     h_ens = [self.classifier_list(h_ens[:, :, ii]) for ii in range(h_ens.shape[2])]
 
-        # h_ch, h_max = self.dfb_classifier_list(h)
-        h_ch = self.dfb_classifier_list(h)
+        h_ch, h_max = self.dfb_classifier_list(h)
+        # h_ch = self.dfb_classifier_list(h)
 
         h = self.globalpool(h)
         h = h.view(h.shape[0], -1)
@@ -171,7 +171,7 @@ class MFNET_3D_DFB(nn.Module):
         #     return h_out, h_ens, coords, heatmaps, probabilities, objects, cat_obj
         # h_out = [h_out, h_ch, h_max]
         # h_out = h_ch
-        h_out = [out + ch for out, ch in zip(h_out, h_ch)]
+        h_out = [out + ch + hmax for out, ch, hmax in zip(h_out, h_ch, h_max)]
         return h_out, coords, heatmaps, probabilities, objects, cat_obj
 
 
