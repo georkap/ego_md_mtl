@@ -100,6 +100,15 @@ class MFNET_3D_DFB(nn.Module):
                                                first_block=(i == 1),
                                                norm=self.norm)) for i in range(1, k_sec[5]+1)])
         )
+        self.conv5_2 = nn.Sequential(
+            OrderedDict([("B%02d" % i, MF_UNIT(num_in=conv4_num_out if i == 1 else conv5_num_out,
+                                               num_mid=num_mid,
+                                               num_out=conv5_num_out,
+                                               stride=(1, 2, 2) if i == 1 else (1, 1, 1),
+                                               g=groups,
+                                               first_block=(i == 1),
+                                               norm=self.norm)) for i in range(1, k_sec[5] + 1)])
+        )
 
         # create heatmaps
         if self.num_coords > 0:
@@ -108,15 +117,18 @@ class MFNET_3D_DFB(nn.Module):
         # final
         self.tail = nn.Sequential(OrderedDict([tailnorm, ('relu', nn.ReLU(inplace=True))]))
 
-        pooling_kernel = (self.t_dim_in // 2, self.s_dim_in // 32, self.s_dim_in // 32)
+        pooling_kernel_avg = (self.t_dim_in // 2, self.s_dim_in // 32, self.s_dim_in // 32)
+        pooling_kernel_max = (self.t_dim_in // 2, self.s_dim_in // 16, self.s_dim_in // 16)
         self.globalpool = nn.Sequential()
-        self.globalpool.add_module('avg', nn.AvgPool3d(kernel_size=pooling_kernel, stride=(1, 1, 1)))
+        self.globalpool.add_module('avg', nn.AvgPool3d(kernel_size=pooling_kernel_avg, stride=(1, 1, 1)))
 
         if dropout:
             self.globalpool.add_module('dropout', nn.Dropout(p=dropout))
 
         self.classifier_list = MultitaskClassifiers(conv5_num_out, num_classes)
-        self.dfb_classifier_list = MultitaskDFBClassifiers(conv5_num_out, num_classes, pooling_kernel, dropout)
+
+        self.dfb_classifier_list = MultitaskDFBClassifiers(conv5_num_out+conv4_num_out, num_classes, pooling_kernel_max,
+                                                           dropout)
 
         # if self.num_objects:
         #     for ii, no in enumerate(self.num_objects): # if there are more than one object presence layers, e.g. one per dataset
@@ -132,18 +144,17 @@ class MFNET_3D_DFB(nn.Module):
 
     def forward(self, x):
         h = self.conv1(x)   # x224 -> x112
-        # print(h.shape)
         h = self.maxpool(h)  # x112 ->  x56
-        # print(h.shape)
         h = self.conv2(h)  # x56 ->  x56
-        # print(h.shape)
         h = self.conv3(h)  # x56 ->  x28
-        # print(h.shape)
         h = self.conv4(h)  # x28 ->  x14
-        # print(h.shape)
-        h = self.conv5(h)  # x14 ->   x7
-        # print(h.shape)
 
+        # local branch
+        h2 = self.conv5_2(h)
+        h2 = F.interpolate(h2, scale_factor=(1, 2, 2), mode='trilinear')
+        h2 = torch.cat([h, h2], dim=1)
+
+        h = self.conv5(h)  # x14 ->   x7
         h = self.tail(h)
         coords, heatmaps, probabilities = None, None, None
         # if self.num_coords > 0:
@@ -154,7 +165,7 @@ class MFNET_3D_DFB(nn.Module):
         #     h_ens = h_ens.view(h_ens.shape[0], h_ens.shape[1], -1)
         #     h_ens = [self.classifier_list(h_ens[:, :, ii]) for ii in range(h_ens.shape[2])]
 
-        h_ch, h_max = self.dfb_classifier_list(h)
+        h_ch, h_max = self.dfb_classifier_list(h2)
         # h_ch = self.dfb_classifier_list(h)
 
         h = self.globalpool(h)
@@ -180,7 +191,7 @@ if __name__ == "__main__":
     # ---------
     kwargs = {'num_coords': 0, 'num_objects': None, 'num_obj_cat': None, 'one_object_layer': True,
               'ensemble_eval': False}
-    net = MFNET_3D_DFB(num_classes=[2513, 125, 352], dropout=0.5, **kwargs)
+    net = MFNET_3D_DFB(num_classes=[106, 19, 53], dropout=0.5, **kwargs)
     data = torch.randn(1, 3, 16, 224, 224, requires_grad=True)
     net.cuda()
     data = data.cuda()
