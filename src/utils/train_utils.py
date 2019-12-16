@@ -282,6 +282,7 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
             optimizer.zero_grad()
 
         network_output = model(inputs)
+        # TODO: fix for dfb
         full_loss = calc_losses_per_dataset(
             network_output, targets, masks, tasks_per_dataset, batch_ids_per_dataset, one_obj_layer, True, gpus[0],
             dataset_metrics)

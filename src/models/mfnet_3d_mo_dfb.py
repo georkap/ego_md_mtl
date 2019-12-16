@@ -11,6 +11,7 @@ mo stands for multiple output
 @author: Γιώργος
 """
 from collections import OrderedDict
+import torch
 import torch.nn as nn
 
 from src.models.layers import CoordRegressionLayer, MultitaskDFBClassifiers, MultitaskClassifiers, ObjectPresenceLayer, MF_UNIT, get_norm_layers
