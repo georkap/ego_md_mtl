@@ -235,7 +235,10 @@ def load_checkpoint(ckpt_path, model_ft, optimizer):
     checkpoint = torch.load(ckpt_path)
     model_ft.load_state_dict(checkpoint['state_dict'])
     if 'optimizer' in checkpoint:
-        optimizer.load_state_dict(checkpoint['optimizer'])
+        try:
+            optimizer.load_state_dict(checkpoint['optimizer'])
+        except ValueError:
+            print("couldn't load previous optimizer")
     return model_ft, optimizer
 
 def resume_checkpoint(model_ft, optimizer, output_dir, model_name, resume_from):
