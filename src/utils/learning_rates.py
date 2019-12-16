@@ -1,6 +1,6 @@
 import numpy as np
 from torch.optim.optimizer import Optimizer
-from torch.optim.lr_scheduler import _LRScheduler
+from torch.optim.lr_scheduler import _LRScheduler, ReduceLROnPlateau
 
 class CustomLRScheduler(object):
     def __init__(self, optimizer, last_epoch=-1):
@@ -234,3 +234,13 @@ class GroupMultistep(_LRScheduler):
             else:
                 lr_mult = 1.0
             param_group['lr'] = self.get_lr()[0] * lr_mult
+
+class ReducePlateau(ReduceLROnPlateau):
+    def __init__(self, optimizer, mode, factor, patience):
+        super(ReducePlateau, self).__init__(optimizer=optimizer, mode=mode, factor=factor, patience=patience)
+
+    def get_lr(self):
+        lrs=[]
+        for i, param_group in enumerate(self.optimizer.param_groups):
+            lrs.append(float(param_group['lr']))
+        return lrs

@@ -71,13 +71,15 @@ def parse_args_training(parser):
     parser.add_argument('--lr_mult_base', type=float, default=1.0)
     parser.add_argument('--lr_mult_new', type=float, default=1.0)
     parser.add_argument('--lr_type', type=str, default='step',
-                        choices=['step', 'multistep', 'clr', 'groupmultistep'])
+                        choices=['step', 'multistep', 'clr', 'groupmultistep', 'reduceplat'])
     parser.add_argument('--lr_steps', nargs='+', type=str, default=[7],
                         help="The value of lr_steps depends on lr_type. If lr_type is:"\
                             +"'step' then lr_steps is a list of size 2 that contains the number of epochs needed to reduce the lr at lr_steps[0] and the gamma to reduce by, at lr_steps[1]."\
                             +"'multistep' then lr_steps is a list of size n+1 for n number of learning rate decreases and the gamma to reduce by at lr_steps[-1]."\
                             +"'clr' then lr_steps is a list of size 6: [base_lr, max_lr, num_epochs_up, num_epochs_down, mode, gamma]. In the clr case, argument 'lr' is ignored."\
-                            +"'groupmultistep' then the arguments are used like 'multistep' but internally different learning rate is applied to different parameter groups.")
+                            +"'groupmultistep' then the arguments are used like 'multistep' but internally different learning rate is applied to different parameter groups." \
+                            +"'reduceplat' args (list of 3): ['min', 'max'] (str), factor (float), patience (int)"
+                        )
     parser.add_argument('--moo', default=False, action='store_true')
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--decay', type=float, default=0.0005)  # decay for mfnet is 0.0001

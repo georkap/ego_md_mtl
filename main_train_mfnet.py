@@ -24,6 +24,7 @@ from src.utils.dataset.dataset_loader_transforms import RandomScale, RandomCrop,
     Normalize, Resize, CenterCrop, PredefinedHorizontalFlip
 from src.utils.train_utils import train_mfnet_mo, test_mfnet_mo
 from src.utils.lr_utils import load_lr_scheduler
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from src.constants import *
 
 
@@ -144,6 +145,8 @@ def main():
                             use_flow=args.flow, one_obj_layer=args.one_object_layer)
             top1 = save_mt_checkpoints(model_ft, optimizer, top1, new_top1, args.save_all_weights, output_dir,
                                        model_name, epoch)
+            if isinstance(lr_scheduler, ReduceLROnPlateau):
+                lr_scheduler.step(new_top1[0])
 
 
 if __name__ == '__main__':

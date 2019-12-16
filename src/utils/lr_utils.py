@@ -1,7 +1,7 @@
 import sys
 
 from torch.optim.lr_scheduler import StepLR, MultiStepLR
-from src.utils.learning_rates import CyclicLR, GroupMultistep
+from src.utils.learning_rates import CyclicLR, GroupMultistep, ReducePlateau
 
 def load_lr_scheduler(lr_type, lr_steps, optimizer, train_iterator_length):
     if lr_type == 'step':
@@ -17,6 +17,11 @@ def load_lr_scheduler(lr_type, lr_steps, optimizer, train_iterator_length):
         lr_scheduler = GroupMultistep(optimizer,
                                       milestones=[int(x) for x in lr_steps[:-1]],
                                       gamma=float(lr_steps[-1]))
+    elif lr_type == 'reduceplat':
+        mode = lr_steps[0]
+        factor = float(lr_steps[1])
+        patience = int(lr_steps[2])
+        lr_scheduler = ReducePlateau(optimizer, mode=mode, factor=factor, patience=patience)
     else:
         sys.exit("Unsupported lr type")
     return lr_scheduler

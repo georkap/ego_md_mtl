@@ -15,6 +15,7 @@ import torch
 
 from src.utils.calc_utils import AverageMeter, accuracy, init_training_metrics, init_test_metrics, update_per_dataset_metrics
 from src.utils.learning_rates import CyclicLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from src.losses.mtl_losses import get_mtl_losses, multiobjective_gradient_optimization
 from src.utils.eval_utils import *
 
@@ -257,7 +258,7 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
 
     optimizer.zero_grad()
     model.train()
-    if not isinstance(lr_scheduler, CyclicLR):
+    if not isinstance(lr_scheduler, CyclicLR) and not isinstance(lr_scheduler, ReduceLROnPlateau):
         lr_scheduler.step()
 
     print_and_save('*********', log_file)
