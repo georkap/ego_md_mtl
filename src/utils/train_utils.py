@@ -417,9 +417,9 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
                 for ind in range(num_cls_tasks):
                     txt_batch_preds += ", "
                     if dfb:
-                        sum_outputs = torch.zeros_like(outputs[ind][0])
+                        sum_outputs = torch.zeros_like(outputs[ind][0][j])
                         for o in outputs[ind]:
-                            sum_outputs += o.softmax(-1)
+                            sum_outputs += o[j].softmax(-1)
                         res = np.argmax(sum_outputs.detach().cpu().numpy())
                     else:
                         res = np.argmax(outputs[ind][j].detach().cpu().numpy())
