@@ -361,6 +361,76 @@ def test_mfnet_mo(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_ty
 
     return task_top1s
 
+def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_file, use_flow=False, one_obj_layer=False,
+                      ensemble=False):
+    dfb = True if isinstance(model.module, MFNET_3D_DFB) else False
+    num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks, num_c_tasks = task_sizes
+    losses = AverageMeter()
+    top1_meters = [AverageMeter() for _ in range(num_cls_tasks)]
+    top5_meters = [AverageMeter() for _ in range(num_cls_tasks)]
+    task_outputs = [[] for _ in range(num_cls_tasks)]
+
+    print_and_save('Evaluating after epoch: {} on {} set'.format(cur_epoch, dataset), log_file)
+    with torch.no_grad():
+        model.eval()
+        for batch_idx, data in enumerate(test_iterator):
+
+            inputs, targets, masks, video_names = init_inputs(data, use_flow, None)
+
+            # outputs, coords, heatmaps, probabilities, objects, obj_cat = model(inputs)
+            network_output = model(inputs)
+            if ensemble:
+                outputs, outputs_e, coords, heatmaps, probabilities, objects, obj_cat = network_output
+            else:
+                outputs, coords, heatmaps, probabilities, objects, obj_cat = network_output
+
+            targets = targets.cuda().transpose(0, 1)
+            masks = masks.cuda()
+
+            counts = [0, 0]
+            if objects is not None:
+                objects = objects[0]
+                counts[0] = objects.shape[1] if one_obj_layer else len(objects) # no dataset id, just use 0 to simulate
+            if obj_cat is not None:
+                obj_cat = obj_cat[0]
+                counts[1] = obj_cat.shape[1] if one_obj_layer else len(obj_cat)
+
+            per_task_outputs = (outputs, coords, heatmaps, probabilities, objects, obj_cat)
+            loss, partial_losses = get_mtl_losses(targets, masks, per_task_outputs, task_sizes, one_obj_layer, counts,
+                                                  is_training=False, dfb=dfb)
+
+            batch_size = outputs[0].size(0)
+
+            # save predictions for evaluation afterwards
+            batch_preds = []
+            for j in range(batch_size):
+                txt_batch_preds = "{}".format(video_names[j])
+                for ind in range(num_cls_tasks):
+                    txt_batch_preds += ", "
+                    res = np.argmax(outputs[ind][j].detach().cpu().numpy())
+                    label = targets[ind][j].detach().cpu().numpy()
+                    task_outputs[ind].append([res, label])
+                    txt_batch_preds += "T{} P-L:{}-{}".format(ind, res, label)
+                batch_preds.append(txt_batch_preds)
+
+            losses.update(loss.item(), batch_size)
+            for ind in range(num_cls_tasks):
+                t1, t5 = accuracy(outputs[ind].detach().cpu(), targets[ind].detach().cpu().long(), topk=(1, 5))
+                top1_meters[ind].update(t1.item(), batch_size)
+                top5_meters[ind].update(t5.item(), batch_size)
+
+            to_print = '[Batch {}/{}]'.format(batch_idx, len(test_iterator))
+            to_print = append_to_print_cls_results(to_print, num_cls_tasks, top1_meters, top5_meters)
+            to_print += '\n\t{}'.format(batch_preds)
+            print_and_save(to_print, log_file)
+
+        to_print = '{} Results: Loss {:.3f}'.format(dataset, losses.avg)
+        for ind in range(num_cls_tasks):
+            to_print += ', T{}::Top1 {:.3f}, Top5 {:.3f}'.format(ind, top1_meters[ind].avg, top5_meters[ind].avg)
+        print_and_save(to_print, log_file)
+    return [tasktop1.avg for tasktop1 in top1_meters], task_outputs
+
+
 def validate_mfnet_mo_gaze(model, test_iterator, num_outputs, use_gaze, use_hands, cur_epoch, dataset, log_file):
     # TODO: add updated code for flow
     auc_frame, auc_temporal = AverageMeter(), AverageMeter()
@@ -469,70 +539,3 @@ def validate_mfnet_mo_json(model, test_iterator, dataset, action_file):
 
     return json_outputs
 
-def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_file, use_flow=False, one_obj_layer=False,
-                      ensemble=False):
-    num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks, num_c_tasks = task_sizes
-    losses = AverageMeter()
-    top1_meters = [AverageMeter() for _ in range(num_cls_tasks)]
-    top5_meters = [AverageMeter() for _ in range(num_cls_tasks)]
-    task_outputs = [[] for _ in range(num_cls_tasks)]
-
-    print_and_save('Evaluating after epoch: {} on {} set'.format(cur_epoch, dataset), log_file)
-    with torch.no_grad():
-        model.eval()
-        for batch_idx, data in enumerate(test_iterator):
-
-            inputs, targets, masks, video_names = init_inputs(data, use_flow, None)
-
-            # outputs, coords, heatmaps, probabilities, objects, obj_cat = model(inputs)
-            network_output = model(inputs)
-            if ensemble:
-                outputs, outputs_e, coords, heatmaps, probabilities, objects, obj_cat = network_output
-            else:
-                outputs, coords, heatmaps, probabilities, objects, obj_cat = network_output
-
-            targets = targets.cuda().transpose(0, 1)
-            masks = masks.cuda()
-
-            counts = [0, 0]
-            if objects is not None:
-                objects = objects[0]
-                counts[0] = objects.shape[1] if one_obj_layer else len(objects) # no dataset id, just use 0 to simulate
-            if obj_cat is not None:
-                obj_cat = obj_cat[0]
-                counts[1] = obj_cat.shape[1] if one_obj_layer else len(obj_cat)
-
-            per_task_outputs = (outputs, coords, heatmaps, probabilities, objects, obj_cat)
-            loss, partial_losses = get_mtl_losses(targets, masks, per_task_outputs, task_sizes, one_obj_layer, counts,
-                                                  is_training=False)
-
-            batch_size = outputs[0].size(0)
-
-            # save predictions for evaluation afterwards
-            batch_preds = []
-            for j in range(batch_size):
-                txt_batch_preds = "{}".format(video_names[j])
-                for ind in range(num_cls_tasks):
-                    txt_batch_preds += ", "
-                    res = np.argmax(outputs[ind][j].detach().cpu().numpy())
-                    label = targets[ind][j].detach().cpu().numpy()
-                    task_outputs[ind].append([res, label])
-                    txt_batch_preds += "T{} P-L:{}-{}".format(ind, res, label)
-                batch_preds.append(txt_batch_preds)
-
-            losses.update(loss.item(), batch_size)
-            for ind in range(num_cls_tasks):
-                t1, t5 = accuracy(outputs[ind].detach().cpu(), targets[ind].detach().cpu().long(), topk=(1, 5))
-                top1_meters[ind].update(t1.item(), batch_size)
-                top5_meters[ind].update(t5.item(), batch_size)
-
-            to_print = '[Batch {}/{}]'.format(batch_idx, len(test_iterator))
-            to_print = append_to_print_cls_results(to_print, num_cls_tasks, top1_meters, top5_meters)
-            to_print += '\n\t{}'.format(batch_preds)
-            print_and_save(to_print, log_file)
-
-        to_print = '{} Results: Loss {:.3f}'.format(dataset, losses.avg)
-        for ind in range(num_cls_tasks):
-            to_print += ', T{}::Top1 {:.3f}, Top5 {:.3f}'.format(ind, top1_meters[ind].avg, top5_meters[ind].avg)
-        print_and_save(to_print, log_file)
-    return [tasktop1.avg for tasktop1 in top1_meters], task_outputs
