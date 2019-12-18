@@ -1,7 +1,7 @@
 import dsntnn
 import torch
-import torch.nn as nn
 from torch import nn as nn
+from torch.functional import F
 
 
 class CoordRegressionLayer(nn.Module):
@@ -24,19 +24,6 @@ class CoordRegressionLayer(nn.Module):
         coords = torch.stack(coords, 1)
 
         return coords, heatmaps, probabilities
-
-class MultitaskClassifiers(nn.Module):
-    def __init__(self, last_conv_size, num_classes):
-        super(MultitaskClassifiers, self).__init__()
-        self.num_classes = [num_cls for num_cls in num_classes if num_cls > 0]
-        self.classifier_list = nn.ModuleList(
-            [nn.Linear(last_conv_size, num_cls) for num_cls in self.num_classes])
-
-    def forward(self, h):
-        h_out = []
-        for i, cl in enumerate(self.classifier_list):
-            h_out.append(cl(h))
-        return h_out
 
 class ObjectPresenceLayer(nn.Module):
     def __init__(self, input_shape, num_objects, one_layer=False):
@@ -176,6 +163,19 @@ class DiscriminativeFilterBankClassifier(nn.Module):
         return x_ch, x_max
         # return x_ch
 
+class MultitaskClassifiers(nn.Module):
+    def __init__(self, last_conv_size, num_classes):
+        super(MultitaskClassifiers, self).__init__()
+        self.num_classes = [num_cls for num_cls in num_classes if num_cls > 0]
+        self.classifier_list = nn.ModuleList(
+            [nn.Linear(last_conv_size, num_cls) for num_cls in self.num_classes])
+
+    def forward(self, h):
+        h_out = []
+        for i, cl in enumerate(self.classifier_list):
+            h_out.append(cl(h))
+        return h_out
+
 class MultitaskDFBClassifiers(nn.Module):
     def __init__(self, last_conv_size, num_classes, max_kernel, dropout, num_dc=5):
         super(MultitaskDFBClassifiers, self).__init__()
@@ -195,3 +195,46 @@ class MultitaskDFBClassifiers(nn.Module):
         return h_ch, h_max
         # return h_ch
 
+class MultitaskLSTMClassifiers(nn.Module):
+    def __init__(self, last_conv_size, num_classes, dropout, num_lstm_layers=1, hidden_multiplier=1):
+        super(MultitaskLSTMClassifiers, self).__init__()
+        self.num_classes = [num_cls for num_cls in num_classes if num_cls > 0]
+        self.num_lstm_layers = num_lstm_layers
+        self.hidden_multiplier = hidden_multiplier
+        for i, cls_task_size in enumerate(self.num_classes):
+            lstm = nn.LSTM(last_conv_size, int(last_conv_size*hidden_multiplier), num_lstm_layers, bias=True,
+                           batch_first=False, dropout=0)
+            fc = nn.Linear(last_conv_size * hidden_multiplier * len(self.num_classes), cls_task_size)
+            self.add_module('lstm_{}'.format(i), lstm)
+            self.add_module('classifier_{}'.format(i), fc)
+        if dropout:
+            self.add_module('dropout', nn.Dropout(p=dropout))
+
+    def forward(self, h): # h is a volume of Bx768x8x7x7 -> 8xBx768
+        batch_size = h.size(0)
+        feat_size = h.size(1)
+
+        h = F.avg_pool3d(h, (1, h.size(3), h.size(4)), (1, 1, 1)) # Bx768x8x1x1
+        h = h.view(h.shape[0], h.shape[1], -1) # Bx768x8
+        h = h.transpose(1, 2).transpose(0, 1) # 8xBx768
+
+        # seq_size = h.size(0)
+
+        h_temp = []
+        for i, cls_task_size in enumerate(self.num_classes):
+            lstm_for_task = getattr(self, 'lstm_{}'.format(i))
+            h0 = torch.zeros(self.num_lstm_layers, batch_size, self.hidden_multiplier * feat_size, device=h.device)
+            c0 = torch.zeros(self.num_lstm_layers, batch_size, self.hidden_multiplier * feat_size, device=h.device)
+            lstm_out, (ht, ct) = lstm_for_task(h, (h0, c0))
+            h_temp.append(lstm_out[-1])
+
+        h_temp = torch.cat(h_temp, dim=1)
+        if hasattr(self, 'dropout'):
+            h_temp = self.dropout(h_temp)
+
+        h_out = []
+        for i in range(len(self.num_classes)):
+            fc = getattr(self, 'classifier_{}'.format(i))
+            h_out.append(fc(h_temp))
+
+        return h_out
