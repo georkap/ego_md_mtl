@@ -213,14 +213,15 @@ def make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_tra
             to_print += '[Losses {:.4f}[avg:{:.4f}], '.format(losses.val, losses.avg)
             for ind in range(num_cls_tasks):
                 if dfb:
-                    to_print += 'T{}::loss '.format(ind)
+                    to_print += '\n\tT{}::loss '.format(ind)
                     for j, l_name in enumerate(['avg', 'ch', 'max', 'sum']):
-                        to_print += ' -({}){:.4f}[avg:{:.4f}] '.format(l_name, cls_loss_meters[ind][j].val,
-                                                                       cls_loss_meters[ind][j].avg)
-                    to_print += '\n'
+                        to_print += ' -({}) {:.4f}[avg:{:.4f}] '.format(l_name, cls_loss_meters[ind][j].val,
+                                                                        cls_loss_meters[ind][j].avg)
                 else:
                     to_print += 'T{}::loss {:.4f}[avg:{:.4f}], '.format(ind, cls_loss_meters[ind].val,
                                                                         cls_loss_meters[ind].avg)
+            if dfb:
+                to_print += '\n\t'
             for ind in range(num_h_tasks):
                 to_print += '[l_hcoo_{} {:.4f}[avg:{:.4f}], '.format(ind, losses_hands[ind].val, losses_hands[ind].avg)
             for ind in range(num_g_tasks):
@@ -332,7 +333,7 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
 def test_mfnet_mo(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_type, log_file, gpus, use_flow=False,
                   one_obj_layer=False):
     is_training = False
-    dfb = True if isinstance(model, MFNET_3D_DFB) else False
+    dfb = True if isinstance(model.module, MFNET_3D_DFB) else False
     dataset_metrics = init_test_metrics(tasks_per_dataset)
 
     with torch.no_grad():

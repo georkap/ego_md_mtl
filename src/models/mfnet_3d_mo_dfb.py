@@ -158,8 +158,8 @@ class MFNET_3D_DFB(nn.Module):
         h = self.conv5(h)  # x14 ->   x7
         h = self.tail(h)
         coords, heatmaps, probabilities = None, None, None
-        # if self.num_coords > 0:
-        #     coords, heatmaps, probabilities = self.coord_layers(h)
+        if self.num_coords > 0:
+            coords, heatmaps, probabilities = self.coord_layers(h)
 
         # if not self.training and self.ensemble_eval: # not fully supported yet
         #     h_ens = F.avg_pool3d(h, (1, self.s_dim_in//32, self.s_dim_in//32), (1, 1, 1))
