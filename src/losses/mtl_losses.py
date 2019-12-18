@@ -20,7 +20,7 @@ def get_mtl_losses(targets, masks, task_outputs, task_sizes, one_obj_layer, coun
             sum_outputs = torch.zeros_like(output[0])
             for o in output: # 1. z_avg, 2. z_ch, z_max
                 z_loss = F.cross_entropy(o, target)
-                sum_outputs += F.softmax(o)
+                sum_outputs += F.softmax(o, dim=-1)
                 cls_losses.append(z_loss)
             z_loss = F.cross_entropy(sum_outputs, target)
             cls_losses.append(z_loss)
