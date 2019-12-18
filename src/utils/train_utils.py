@@ -215,8 +215,9 @@ def make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_tra
                 if dfb:
                     to_print += 'T{}::loss '.format(ind)
                     for j, l_name in enumerate(['avg', 'ch', 'max', 'sum']):
-                        to_print += '-({}){:.4f}[avg:{:.4f}'.format(l_name, cls_loss_meters[ind][j].val,
-                                                                    cls_loss_meters[ind][j].avg)
+                        to_print += ' -({}){:.4f}[avg:{:.4f}] '.format(l_name, cls_loss_meters[ind][j].val,
+                                                                       cls_loss_meters[ind][j].avg)
+                    to_print += '\n'
                 else:
                     to_print += 'T{}::loss {:.4f}[avg:{:.4f}], '.format(ind, cls_loss_meters[ind].val,
                                                                         cls_loss_meters[ind].avg)
