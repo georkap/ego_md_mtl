@@ -384,8 +384,18 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
             else:
                 outputs, coords, heatmaps, probabilities, objects, obj_cat = network_output
 
+            batch_size = targets.shape[0]
             targets = targets.cuda().transpose(0, 1)
             masks = masks.cuda()
+
+            if dfb:
+                temp_outputs = []
+                for task_id in range(num_cls_tasks):
+                    tmp_outputs = []
+                    for o in outputs:
+                        tmp_outputs.append(o[task_id])
+                    temp_outputs.append(tmp_outputs)
+                outputs = temp_outputs
 
             counts = [0, 0]
             if objects is not None:
@@ -399,7 +409,6 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
             loss, partial_losses = get_mtl_losses(targets, masks, per_task_outputs, task_sizes, one_obj_layer, counts,
                                                   is_training=False, dfb=dfb)
 
-            batch_size = outputs[0].size(0)
 
             # save predictions for evaluation afterwards
             batch_preds = []
@@ -407,7 +416,13 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
                 txt_batch_preds = "{}".format(video_names[j])
                 for ind in range(num_cls_tasks):
                     txt_batch_preds += ", "
-                    res = np.argmax(outputs[ind][j].detach().cpu().numpy())
+                    if dfb:
+                        sum_outputs = torch.zeros_like(outputs[ind][0])
+                        for o in outputs[ind]:
+                            sum_outputs += o.softmax(-1)
+                        res = np.argmax(sum_outputs.detach().cpu().numpy())
+                    else:
+                        res = np.argmax(outputs[ind][j].detach().cpu().numpy())
                     label = targets[ind][j].detach().cpu().numpy()
                     task_outputs[ind].append([res, label])
                     txt_batch_preds += "T{} P-L:{}-{}".format(ind, res, label)
@@ -415,7 +430,13 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
 
             losses.update(loss.item(), batch_size)
             for ind in range(num_cls_tasks):
-                t1, t5 = accuracy(outputs[ind].detach().cpu(), targets[ind].detach().cpu().long(), topk=(1, 5))
+                if dfb:
+                    sum_outputs = torch.zeros_like(outputs[ind][0])
+                    for o in outputs[ind]:
+                        sum_outputs += o.softmax(-1)
+                    t1, t5 = accuracy(sum_outputs.detach().cpu(), targets[ind].detach().cpu().long(), topk=(1, 5))
+                else:
+                    t1, t5 = accuracy(outputs[ind].detach().cpu(), targets[ind].detach().cpu().long(), topk=(1, 5))
                 top1_meters[ind].update(t1.item(), batch_size)
                 top5_meters[ind].update(t5.item(), batch_size)
 
