@@ -18,7 +18,7 @@ from src.utils.learning_rates import CyclicLR
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from src.losses.mtl_losses import get_mtl_losses, multiobjective_gradient_optimization
 from src.utils.eval_utils import *
-
+from src.models.mfnet_3d_mo_dfb import MFNET_3D_DFB
 
 def mixup_data(x, y, alpha=1.0, use_cuda=True):
     """Returns mixed inputs, pairs of targets, and lambda"""
@@ -83,7 +83,7 @@ def update_metrics_per_dataset(dataset_metrics, outputs_per_dataset, targets_per
                                    dataset_batch_size, is_training)
 
 def calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, batch_ids_per_dataset, one_obj_layer,
-                            is_training, base_gpu, dataset_metrics):
+                            is_training, base_gpu, dataset_metrics, dfb=False):
     (outputs, coords, heatmaps, probabilities, objects, obj_cat) = network_output
 
     full_loss = []
@@ -122,12 +122,14 @@ def calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, b
             continue
         # get model's outputs for the classification tasks for the current dataset
         for task_id in range(num_cls_tasks):
-            # tmp_outputs = outputs[global_task_id + task_id][batch_ids_per_dataset[dataset_id]]
             # increase first dim of tmp_outputs to accomodate dfb model,
             # also added dimension to the non-dfb models to facilite code in this stage
-            tmp_outputs = []
-            for o in outputs:
-                tmp_outputs.append(o[global_task_id + task_id][batch_ids_per_dataset[dataset_id]])
+            if dfb:
+                tmp_outputs = []
+                for o in outputs:
+                    tmp_outputs.append(o[global_task_id + task_id][batch_ids_per_dataset[dataset_id]])
+            else:
+                tmp_outputs = outputs[global_task_id + task_id][batch_ids_per_dataset[dataset_id]]
             outputs_per_dataset[dataset_id].append(tmp_outputs)
         # get model's outputs for the coord tasks of the current dataset
         coo, hea, pro = None, None, None
@@ -164,7 +166,8 @@ def calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, b
         task_sizes = (num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks, num_c_tasks)
 
         loss, partial_losses = get_mtl_losses(targets_per_dataset[dataset_id], masks_per_dataset[dataset_id],
-                                              task_outputs, task_sizes, one_obj_layer, counts, is_training=is_training)
+                                              task_outputs, task_sizes, one_obj_layer, counts, is_training=is_training,
+                                              dfb=dfb)
 
         global_task_id += num_cls_tasks
         global_coord_id += num_coord_tasks
@@ -256,8 +259,11 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
                    moo=False, use_flow=False, one_obj_layer=False, grad_acc_batches=None):
     batch_time, full_losses_metric, dataset_metrics = init_training_metrics(tasks_per_dataset)
 
+    dfb = True if isinstance(model, MFNET_3D_DFB) else False
+
     optimizer.zero_grad()
     model.train()
+    is_training = True
     if not isinstance(lr_scheduler, CyclicLR) and not isinstance(lr_scheduler, ReduceLROnPlateau):
         lr_scheduler.step()
 
@@ -273,8 +279,8 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
         if isinstance(lr_scheduler, CyclicLR):
             lr_scheduler.step()
 
-        inputs, targets, masks, dataset_ids, batch_ids_per_dataset = init_inputs_batch(
-            data, tasks_per_dataset, use_flow, gpus[0])
+        inputs, targets, masks, dataset_ids, batch_ids_per_dataset = init_inputs_batch(data, tasks_per_dataset,
+                                                                                       use_flow, gpus[0])
 
         if grad_acc_batches is not None:
             if num_aggregated_batches == 0:
@@ -283,10 +289,9 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
             optimizer.zero_grad()
 
         network_output = model(inputs)
-        # TODO: fix for dfb
         full_loss = calc_losses_per_dataset(
-            network_output, targets, masks, tasks_per_dataset, batch_ids_per_dataset, one_obj_layer, True, gpus[0],
-            dataset_metrics)
+            network_output, targets, masks, tasks_per_dataset, batch_ids_per_dataset, one_obj_layer, is_training,
+            gpus[0], dataset_metrics, dfb)
 
         # implement grad accumulation
         if grad_acc_batches is not None:
@@ -302,7 +307,7 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
                 to_print = '[Epoch:{}, Batch {}/{} in {:.3f} s, LR {:.6f}]'.format(
                     cur_epoch, real_batch_idx, len(train_iterator)//num_aggregated_batches, batch_time.val,
                     lr_scheduler.get_lr()[0])
-                make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, True, full_losses_metric,
+                make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_training, full_losses_metric,
                               dataset_ids, grad_acc_loss)
                 num_aggregated_batches = 0
         else:
@@ -313,14 +318,16 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
             # print results
             to_print = '[Epoch:{}, Batch {}/{} in {:.3f} s, LR {:.6f}]'.format(
                 cur_epoch, batch_idx, len(train_iterator), batch_time.val, lr_scheduler.get_lr()[0])
-            make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, True, full_losses_metric, dataset_ids,
-                          full_loss)
+            make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_training, full_losses_metric,
+                          dataset_ids, full_loss)
 
     print_and_save("Epoch train time: {}".format(batch_time.sum), log_file)
 
 def test_mfnet_mo(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_type, log_file, gpus, use_flow=False,
                   one_obj_layer=False):
     dataset_metrics = init_test_metrics(tasks_per_dataset)
+    is_training = False
+    dfb = True if isinstance(model, MFNET_3D_DFB) else False
 
     with torch.no_grad():
         model.eval()
@@ -331,11 +338,11 @@ def test_mfnet_mo(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_ty
 
             network_output = model(inputs)
             _ = calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, batch_ids_per_dataset,
-                                        one_obj_layer, False, gpus[0], dataset_metrics)
+                                        one_obj_layer, is_training, gpus[0], dataset_metrics, dfb)
 
             # print results
             to_print = '[Epoch:{}, Batch {}/{}]'.format(cur_epoch, batch_idx, len(test_iterator))
-            make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, False)
+            make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_training)
 
         make_final_test_print(tasks_per_dataset, dataset_metrics, dataset_type, log_file)
 

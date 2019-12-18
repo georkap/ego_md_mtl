@@ -5,7 +5,7 @@ from src.losses.object_loss import object_loss
 from src.losses.min_norm_solvers import MinNormSolver, gradient_normalizers
 
 
-def get_mtl_losses(targets, masks, task_outputs, task_sizes, one_obj_layer, counts, is_training=False):
+def get_mtl_losses(targets, masks, task_outputs, task_sizes, one_obj_layer, counts, is_training=False, dfb=False):
     outputs, coords, heatmaps, probabilities, objects, obj_cat = task_outputs
     num_cls_outputs, num_g_outputs, num_h_outputs, num_o_outputs, num_c_outputs = task_sizes
     targets_starting_point = num_cls_outputs
@@ -16,7 +16,7 @@ def get_mtl_losses(targets, masks, task_outputs, task_sizes, one_obj_layer, coun
     assert len(cls_targets) == num_cls_outputs
 
     for output, target in zip(outputs, cls_targets):
-        if isinstance(output, list): # we are in the dfb case and we have multiple losses for each task
+        if dfb:
             sum_outputs = torch.zeros_like(output[0])
             for o in output: # 1. z_avg, 2. z_ch, z_max
                 z_loss = F.cross_entropy(o, target)
