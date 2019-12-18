@@ -15,8 +15,8 @@ from src.utils.file_utils import print_and_save
 from src.utils.epic_eval_utils import get_manyhot_classes
 from src.constants import *
 
-def update_per_dataset_metrics(metrics, outputs_for_dat, targets_for_dat, dataset_loss,
-                               partial_task_losses, num_cls_tasks, dataset_batch_size, is_training):
+def update_per_dataset_metrics(metrics, outputs_for_dat, targets_for_dat, dataset_loss, partial_task_losses,
+                               num_cls_tasks, dataset_batch_size, is_training, dfb):
     cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses = partial_task_losses
 
     metrics['losses'].update(dataset_loss.item(), dataset_batch_size)
@@ -31,7 +31,11 @@ def update_per_dataset_metrics(metrics, outputs_for_dat, targets_for_dat, datase
         metrics['top1_meters'][i].update(t1.item(), dataset_batch_size)
         metrics['top5_meters'][i].update(t5.item(), dataset_batch_size)
         if is_training:
-            metrics['cls_loss_meters'][i].update(cls_losses[i].item(), dataset_batch_size)
+            if dfb:
+                for j in range(4): # dfb size
+                    metrics['cls_loss_meters'][i][j].update(cls_losses[i*4 + j].item(), dataset_batch_size)
+            else:
+                metrics['cls_loss_meters'][i].update(cls_losses[i].item(), dataset_batch_size)
     if is_training:
         for i, gl in enumerate(gaze_coord_losses):
             metrics['losses_gaze'][i].update(gl.item(), dataset_batch_size)
@@ -56,7 +60,7 @@ def init_test_metrics(tasks_per_dataset):
         dataset_metrics[i]['top5_meters'] = top5_meters
     return dataset_metrics
 
-def init_training_metrics(tasks_per_dataset):
+def init_training_metrics(tasks_per_dataset, dfb):
     batch_time = AverageMeter()
     full_losses = AverageMeter()
     dataset_metrics = list()
@@ -68,7 +72,9 @@ def init_training_metrics(tasks_per_dataset):
         num_o_tasks = dataset['num_o_tasks']
         num_c_tasks = dataset['num_c_tasks']
         losses = AverageMeter()
-        cls_loss_meters = [AverageMeter() for _ in range(num_cls_tasks)]
+        cls_loss_meters = []
+        for _ in range(num_cls_tasks):
+            cls_loss_meters.append([AverageMeter() for _ in range(4)] if dfb else AverageMeter()) # 4 is the dfb size
         losses_hands = [AverageMeter() for _ in range(num_h_tasks)]
         losses_gaze = [AverageMeter() for _ in range(num_g_tasks)]
         losses_objects = [AverageMeter() for _ in range(num_o_tasks)]

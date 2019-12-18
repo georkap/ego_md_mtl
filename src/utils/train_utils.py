@@ -70,17 +70,17 @@ def init_inputs_batch(data, tasks_per_dataset, use_flow, base_gpu):
     batch_ids_per_dataset = init_batch(tasks_per_dataset, dataset_ids)
     return inputs, targets, masks, dataset_ids, batch_ids_per_dataset
 
-def update_metrics_per_dataset(dataset_metrics, outputs_per_dataset, targets_per_dataset, loss_per_dataset,
-                               partial_loss_per_dataset, batch_ids_per_dataset, tasks_per_dataset, is_training):
-    # update metrics
-    for dataset_id in range(len(tasks_per_dataset)):
-        num_cls_tasks = tasks_per_dataset[dataset_id]['num_cls_tasks']
-        loss = loss_per_dataset[dataset_id]
-        partial_losses = partial_loss_per_dataset[dataset_id]
-        dataset_batch_size = len(batch_ids_per_dataset[dataset_id])
-        update_per_dataset_metrics(dataset_metrics[dataset_id], outputs_per_dataset[dataset_id],
-                                   targets_per_dataset[dataset_id], loss, partial_losses, num_cls_tasks,
-                                   dataset_batch_size, is_training)
+# def update_metrics_per_dataset(dataset_metrics, outputs_per_dataset, targets_per_dataset, loss_per_dataset,
+#                                partial_loss_per_dataset, batch_ids_per_dataset, tasks_per_dataset, is_training, dfb):
+#     # update metrics
+#     for dataset_id in range(len(tasks_per_dataset)):
+#         num_cls_tasks = tasks_per_dataset[dataset_id]['num_cls_tasks']
+#         loss = loss_per_dataset[dataset_id]
+#         partial_losses = partial_loss_per_dataset[dataset_id]
+#         dataset_batch_size = len(batch_ids_per_dataset[dataset_id])
+#         update_per_dataset_metrics(dataset_metrics[dataset_id], outputs_per_dataset[dataset_id],
+#                                    targets_per_dataset[dataset_id], loss, partial_losses, num_cls_tasks,
+#                                    dataset_batch_size, is_training, dfb)
 
 def calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, batch_ids_per_dataset, one_obj_layer,
                             is_training, base_gpu, dataset_metrics, dfb=False):
@@ -180,13 +180,13 @@ def calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, b
         dataset_batch_size = len(batch_ids_per_dataset[dataset_id])
         update_per_dataset_metrics(dataset_metrics[dataset_id], outputs_per_dataset[dataset_id],
                                    targets_per_dataset[dataset_id], loss, partial_losses, num_cls_tasks,
-                                   dataset_batch_size, is_training)
+                                   dataset_batch_size, is_training, dfb)
 
     return sum(full_loss)
     # return full_loss, partial_loss, outputs_per_dataset, targets_per_dataset
 
 def make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_training,
-                  full_losses=None, dataset_ids=None, full_loss=None):
+                  full_losses=None, dataset_ids=None, full_loss=None, dfb=False):
     num_datasets = len(tasks_per_dataset)
     if is_training:
         if num_datasets > 1:
@@ -212,8 +212,14 @@ def make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_tra
             cls_loss_meters = dataset_metrics[dataset_id]['cls_loss_meters']
             to_print += '[Losses {:.4f}[avg:{:.4f}], '.format(losses.val, losses.avg)
             for ind in range(num_cls_tasks):
-                to_print += 'T{}::loss {:.4f}[avg:{:.4f}], '.format(ind, cls_loss_meters[ind].val,
-                                                                    cls_loss_meters[ind].avg)
+                if dfb:
+                    to_print += 'T{}::loss '.format(ind)
+                    for j, l_name in enumerate(['avg', 'ch', 'max', 'sum']):
+                        to_print += '-({}){:.4f}[avg:{:.4f}'.format(l_name, cls_loss_meters[ind][j].val,
+                                                                    cls_loss_meters[ind][j].avg)
+                else:
+                    to_print += 'T{}::loss {:.4f}[avg:{:.4f}], '.format(ind, cls_loss_meters[ind].val,
+                                                                        cls_loss_meters[ind].avg)
             for ind in range(num_h_tasks):
                 to_print += '[l_hcoo_{} {:.4f}[avg:{:.4f}], '.format(ind, losses_hands[ind].val, losses_hands[ind].avg)
             for ind in range(num_g_tasks):
@@ -257,9 +263,8 @@ def make_final_test_print(tasks_per_dataset, dataset_metrics, dataset_type, log_
 
 def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoch, log_file, gpus, lr_scheduler=None,
                    moo=False, use_flow=False, one_obj_layer=False, grad_acc_batches=None):
-    batch_time, full_losses_metric, dataset_metrics = init_training_metrics(tasks_per_dataset)
-
-    dfb = True if isinstance(model, MFNET_3D_DFB) else False
+    dfb = True if isinstance(model.module, MFNET_3D_DFB) else False
+    batch_time, full_losses_metric, dataset_metrics = init_training_metrics(tasks_per_dataset, dfb)
 
     optimizer.zero_grad()
     model.train()
