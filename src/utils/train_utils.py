@@ -313,7 +313,7 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
                     cur_epoch, real_batch_idx, len(train_iterator)//num_aggregated_batches, batch_time.val,
                     lr_scheduler.get_lr()[0])
                 make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_training, full_losses_metric,
-                              dataset_ids, grad_acc_loss)
+                              dataset_ids, grad_acc_loss, dfb)
                 num_aggregated_batches = 0
         else:
             full_loss.backward()
@@ -324,15 +324,15 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
             to_print = '[Epoch:{}, Batch {}/{} in {:.3f} s, LR {:.6f}]'.format(
                 cur_epoch, batch_idx, len(train_iterator), batch_time.val, lr_scheduler.get_lr()[0])
             make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_training, full_losses_metric,
-                          dataset_ids, full_loss)
+                          dataset_ids, full_loss, dfb)
 
     print_and_save("Epoch train time: {}".format(batch_time.sum), log_file)
 
 def test_mfnet_mo(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_type, log_file, gpus, use_flow=False,
                   one_obj_layer=False):
-    dataset_metrics = init_test_metrics(tasks_per_dataset)
     is_training = False
     dfb = True if isinstance(model, MFNET_3D_DFB) else False
+    dataset_metrics = init_test_metrics(tasks_per_dataset)
 
     with torch.no_grad():
         model.eval()
@@ -347,7 +347,7 @@ def test_mfnet_mo(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_ty
 
             # print results
             to_print = '[Epoch:{}, Batch {}/{}]'.format(cur_epoch, batch_idx, len(test_iterator))
-            make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_training)
+            make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_training, dfb)
 
         make_final_test_print(tasks_per_dataset, dataset_metrics, dataset_type, log_file)
 
