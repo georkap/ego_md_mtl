@@ -52,6 +52,7 @@ def main():
         mfnet_3d = MFNET_3D_DFB
     elif args.lstm:
         mfnet_3d = MFNET_3D_LSTM
+        kwargs['attn'] = args.attn
     else:
         mfnet_3d = MFNET_3D_MO
         if args.only_flow:

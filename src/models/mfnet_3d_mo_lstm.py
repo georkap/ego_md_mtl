@@ -13,7 +13,7 @@ mo stands for multiple output
 from collections import OrderedDict
 import torch.nn as nn
 
-from src.models.layers import CoordRegressionLayer, MultitaskLSTMClassifiers, ObjectPresenceLayer, MF_UNIT, get_norm_layers
+from src.models.layers import CoordRegressionLayer, MultitaskLSTMClassifiers, MultitaskLSTMAttnClassifiers, ObjectPresenceLayer, MF_UNIT, get_norm_layers
 from src.utils.initializer import xavier
 from torch.functional import F
 
@@ -33,6 +33,7 @@ class MFNET_3D_LSTM(nn.Module):
         self.s_dim_in = kwargs.get('spatial_size', 224)
         self.lstm_hidden_mult = kwargs.get('lstm_hidden_mult', 1)
         self.lstm_num_layers = kwargs.get('lstm_num_layers', 1)
+        self.attn = kwargs.get('attn', False)
         input_channels = kwargs.get('input_channels', 3)
         groups = 16
         k_sec = kwargs.get('k_sec', {2: 3, 3: 4, 4: 6, 5: 3})
@@ -116,8 +117,12 @@ class MFNET_3D_LSTM(nn.Module):
         # if dropout:
         #     self.globalpool.add_module('dropout', nn.Dropout(p=dropout))
 
-        self.lstm_classifiers = MultitaskLSTMClassifiers(conv5_num_out, num_classes, dropout, self.lstm_num_layers,
-                                                         self.lstm_hidden_mult)
+        if self.attn:
+            self.lstm_classifiers = MultitaskLSTMAttnClassifiers(conv5_num_out, num_classes, dropout, self.t_dim_in//2,
+                                                                 self.lstm_num_layers, self.lstm_hidden_mult)
+        else:
+            self.lstm_classifiers = MultitaskLSTMClassifiers(conv5_num_out, num_classes, dropout, self.lstm_num_layers,
+                                                             self.lstm_hidden_mult)
 
         # if self.num_objects:
         #     for ii, no in enumerate(self.num_objects): # if there are more than one object presence layers, e.g. one per dataset

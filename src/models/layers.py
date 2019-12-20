@@ -238,3 +238,79 @@ class MultitaskLSTMClassifiers(nn.Module):
             h_out.append(fc(h_temp))
 
         return h_out
+
+class MultitaskLSTMAttnClassifiers(nn.Module):
+    def __init__(self, last_conv_size, num_classes, dropout, max_seq_len, num_lstm_layers=1, hidden_multiplier=1):
+        super(MultitaskLSTMAttnClassifiers, self).__init__()
+        self.num_classes = [num_cls for num_cls in num_classes if num_cls > 0]
+        self.num_lstm_layers = num_lstm_layers
+        self.hidden_multiplier = hidden_multiplier
+        for i, cls_task_size in enumerate(self.num_classes):
+            hidden_size = int(last_conv_size * hidden_multiplier)
+            lstm = nn.LSTM(last_conv_size, hidden_size, num_lstm_layers, bias=True,
+                           batch_first=False, dropout=0)
+            attn_decoder = AttnDecoderLSTM(last_conv_size, hidden_size, max_seq_len)
+            fc = nn.Linear(hidden_size * len(self.num_classes), cls_task_size)
+            self.add_module('encoder_{}'.format(i), lstm)
+            self.add_module('attn_decoder_{}'.format(i), attn_decoder)
+            self.add_module('classifier_{}'.format(i), fc)
+        if dropout:
+            self.add_module('dropout', nn.Dropout(p=dropout))
+
+    def forward(self, h):# h is a volume of Bx768x8x7x7 -> 8xBx768
+        batch_size = h.size(0)
+        feat_size = h.size(1)
+
+        h = F.avg_pool3d(h, (1, h.size(3), h.size(4)), (1, 1, 1)) # Bx768x8x1x1
+        h = h.view(h.shape[0], h.shape[1], -1) # Bx768x8
+        h = h.transpose(1, 2).transpose(0, 1) # 8xBx768
+
+        h_temp = []
+        for i, cls_task_size in enumerate(self.num_classes):
+            encoder = getattr(self, 'encoder_{}'.format(i))
+            h0 = torch.zeros(self.num_lstm_layers, batch_size, self.hidden_multiplier * feat_size, device=h.device)
+            c0 = torch.zeros(self.num_lstm_layers, batch_size, self.hidden_multiplier * feat_size, device=h.device)
+            encoder_out, (ht, ct) = encoder(h, (h0, c0))
+            attn_decoder = getattr(self, 'attn_decoder_{}'.format(i))
+            decoder_out = attn_decoder(h, encoder_out)
+            h_temp.append(decoder_out[-1])
+
+        h_temp = torch.cat(h_temp, dim=1)
+        if hasattr(self, 'dropout'):
+            h_temp = self.dropout(h_temp)
+
+        h_out = []
+        for i in range(len(self.num_classes)):
+            fc = getattr(self, 'classifier_{}'.format(i))
+            h_out.append(fc(h_temp))
+
+        return h_out
+
+
+class AttnDecoderLSTM(nn.Module):
+    def __init__(self, input_size, hidden_size, max_seq_len):
+        super(AttnDecoderLSTM, self).__init__()
+        self.hidden_size = hidden_size
+        self.max_seq_len = max_seq_len
+
+        # attn layer will calculate which step's weights to pay attention to.
+        self.attn = nn.Linear(input_size + hidden_size, max_seq_len)
+        self.attn_combine = nn.Linear(input_size + hidden_size, hidden_size)
+        self.decoder = nn.LSTM(hidden_size, hidden_size, 1, bias=True, batch_first=False, dropout=0)
+
+    def forward(self, h, encoder_out):
+        attended_encoder_out = torch.zeros_like(encoder_out)
+        for seq_index in range(self.max_seq_len):
+            cat_for_attn = torch.cat((h[seq_index], encoder_out[seq_index]), 1)
+            attn = self.attn(cat_for_attn)
+            attn = F.softmax(attn, dim=1)
+            attn_applied = torch.bmm(attn.unsqueeze(1), torch.transpose(encoder_out, 0, 1))
+            temp_encoder_out = torch.cat((h[seq_index], attn_applied[:, 0, :]), 1)
+            attended_encoder_out[seq_index] = self.attn_combine(temp_encoder_out)
+
+        batch_size = h.size(1)
+        h0 = torch.zeros(1, batch_size, self.hidden_size, device=h.device)
+        c0 = torch.zeros(1, batch_size, self.hidden_size, device=h.device)
+        decoder_out, (ht, ct) = self.decoder(h, (h0, c0))
+
+        return decoder_out
