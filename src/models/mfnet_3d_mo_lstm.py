@@ -13,7 +13,7 @@ mo stands for multiple output
 from collections import OrderedDict
 import torch.nn as nn
 
-from src.models.layers import CoordRegressionLayer, MultitaskLSTMClassifiers, MultitaskLSTMAttnClassifiers, ObjectPresenceLayer, MF_UNIT, get_norm_layers
+from src.models.layers import CoordRegressionLayer, MultitaskLSTMClassifiers, MultitaskLSTMAttnClassifiers, MultitaskClassifiers, ObjectPresenceLayer, MF_UNIT, get_norm_layers
 from src.utils.initializer import xavier
 from torch.functional import F
 
@@ -34,6 +34,7 @@ class MFNET_3D_LSTM(nn.Module):
         self.lstm_hidden_mult = kwargs.get('lstm_hidden_mult', 1)
         self.lstm_num_layers = kwargs.get('lstm_num_layers', 1)
         self.attn = kwargs.get('attn', False)
+        self.mtl = kwargs.get('mtl', False)
         input_channels = kwargs.get('input_channels', 3)
         groups = 16
         k_sec = kwargs.get('k_sec', {2: 3, 3: 4, 4: 6, 5: 3})
@@ -111,11 +112,13 @@ class MFNET_3D_LSTM(nn.Module):
         # final
         self.tail = nn.Sequential(OrderedDict([tailnorm, ('relu', nn.ReLU(inplace=True))]))
 
-        # self.globalpool = nn.Sequential()
-        # self.globalpool.add_module('avg', nn.AvgPool3d(kernel_size=(self.t_dim_in // 2, self.s_dim_in // 32,
-        #                                                             self.s_dim_in // 32), stride=(1, 1, 1)))
-        # if dropout:
-        #     self.globalpool.add_module('dropout', nn.Dropout(p=dropout))
+        if self.mtl:
+            self.globalpool = nn.Sequential()
+            self.globalpool.add_module('avg', nn.AvgPool3d(kernel_size=(self.t_dim_in // 2, self.s_dim_in // 32,
+                                                                        self.s_dim_in // 32), stride=(1, 1, 1)))
+            if dropout:
+                self.globalpool.add_module('dropout', nn.Dropout(p=dropout))
+            self.classifier_list = MultitaskClassifiers(conv5_num_out, num_classes)
 
         if self.attn:
             self.lstm_classifiers = MultitaskLSTMAttnClassifiers(conv5_num_out, num_classes, dropout, self.t_dim_in//2,
@@ -154,9 +157,13 @@ class MFNET_3D_LSTM(nn.Module):
             h_ens = h_ens.view(h_ens.shape[0], h_ens.shape[1], -1)
             h_ens = [self.classifier_list(h_ens[:, :, ii]) for ii in range(h_ens.shape[2])]
 
-        # h = self.globalpool(h)
-        # h = h.view(h.shape[0], -1)
         h_out = self.lstm_classifiers(h)
+
+        if self.mtl:
+            h = self.globalpool(h)
+            h = h.view(h.shape[0], -1)
+            h_avg = self.classifier_list(h)
+            h_out = [h_out, h_avg]
 
         objects = None
         # if self.num_objects:
@@ -175,7 +182,7 @@ class MFNET_3D_LSTM(nn.Module):
 if __name__ == "__main__":
     import torch, time
     # ---------
-    kwargs = {'num_coords': 0, 'num_objects': None, 'num_obj_cat': None, 'one_object_layer': True,
+    kwargs = {'num_coords': 0, 'num_objects': None, 'num_obj_cat': None, 'mtl': True, 'one_object_layer': True,
               'ensemble_eval': False}
     net = MFNET_3D_LSTM(num_classes=[106, 19, 53], dropout=0.5, **kwargs)
     data = torch.randn(1, 3, 16, 224, 224, requires_grad=True)

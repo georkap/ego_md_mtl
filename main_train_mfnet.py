@@ -41,6 +41,7 @@ def main():
     print_and_save("Training for {} objective(s)".format(sum(objectives)), log_file)
     print_and_save(objectives_text, log_file)
     cudnn.benchmark = True
+    multioutput_loss = 0
 
     kwargs = dict()
     if args.sf:
@@ -50,9 +51,13 @@ def main():
         kwargs['modalities'] = {'RGB': 3, 'Flow': 2}
     elif args.dfb:
         mfnet_3d = MFNET_3D_DFB
+        multioutput_loss = 4
     elif args.lstm:
         mfnet_3d = MFNET_3D_LSTM
         kwargs['attn'] = args.attn
+        kwargs['mtl'] = args.mtl
+        if args.mtl:
+            multioutput_loss = 3
     else:
         mfnet_3d = MFNET_3D_MO
         if args.only_flow:
@@ -140,13 +145,13 @@ def main():
     for epoch in range(args.max_epochs):
         train(model_ft, optimizer, train_iterator, tasks_per_dataset, epoch, log_file, args.gpus, lr_scheduler,
               moo=args.moo, use_flow=args.flow, one_obj_layer=args.one_object_layer,
-              grad_acc_batches=args.grad_acc_batches)
+              grad_acc_batches=args.grad_acc_batches, multioutput_loss=multioutput_loss)
         if (epoch+1) % args.eval_freq == 0:
             if args.eval_on_train:
                 test(model_ft, train_iterator, tasks_per_dataset, epoch, "Train", log_file, args.gpus,
-                     use_flow=args.flow, one_obj_layer=args.one_object_layer)
+                     use_flow=args.flow, one_obj_layer=args.one_object_layer, multioutput_loss=multioutput_loss)
             new_top1 = test(model_ft, test_iterator, tasks_per_dataset, epoch, "Test", log_file, args.gpus,
-                            use_flow=args.flow, one_obj_layer=args.one_object_layer)
+                            use_flow=args.flow, one_obj_layer=args.one_object_layer, multioutput_loss=multioutput_loss)
             top1 = save_mt_checkpoints(model_ft, optimizer, top1, new_top1, args.save_all_weights, output_dir,
                                        model_name, epoch)
             if isinstance(lr_scheduler, ReduceLROnPlateau):

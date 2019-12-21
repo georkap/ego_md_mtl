@@ -66,6 +66,7 @@ def main():
     log_file = make_log_file_name(output_dir, args)
     print_and_save(args, log_file)
     cudnn.benchmark = True
+    multioutput_loss = 0
 
     kwargs = dict()
     if args.sf:
@@ -75,9 +76,13 @@ def main():
         kwargs['modalities'] = {'RGB':3, 'Flow':2}
     elif args.dfb:
         mfnet_3d = MFNET_3D_DFB
+        multioutput_loss = 4
     elif args.lstm:
         mfnet_3d = MFNET_3D_LSTM
         kwargs['attn'] = args.attn
+        kwargs['mtl'] = args.mtl
+        if args.mtl:
+            multioutput_loss = 3
     else:
         mfnet_3d = MFNET_3D_MO
     validate = validate_mfnet_mo
@@ -132,7 +137,7 @@ def main():
 
         # evaluate dataset
         top1, outputs = validate(model_ft, val_iter, objectives, checkpoint['epoch'], args.dataset, log_file, args.flow,
-                                 one_obj_layer=args.one_object_layer)
+                                 one_obj_layer=args.one_object_layer, multioutput_loss=multioutput_loss)
 
         # calculate statistics
         for ind in range(len(num_classes)):

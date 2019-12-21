@@ -52,6 +52,7 @@ def parse_args_network(parser, net_type):
         parser.add_argument('--dfb', default=False, action='store_true')
         parser.add_argument('--lstm', default=False, action='store_true')
         parser.add_argument('--attn', default=False, action='store_true')
+        parser.add_argument('--mtl', default=False, action='store_true')
         parser.add_argument('--only_flow', default=False, action='store_true')
         parser.add_argument('--one_object_layer', default=False, action='store_true')
         parser.add_argument('--pretrained', default=False, action='store_true')
