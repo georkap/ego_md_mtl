@@ -106,6 +106,7 @@ def parse_args_eval(parser):
     parser.add_argument('--eval_window', type=int, default=32)
     parser.add_argument('--eval_tasks', type=str, default=None)
     parser.add_argument('--eval_dataset', type=str, default=None)
+    parser.add_argument('--eval_branch', type=int, default=None, help='choose from 0-2 depending on the model, for the sum use None')
 
     return parser
 

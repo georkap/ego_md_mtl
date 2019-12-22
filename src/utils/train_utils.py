@@ -364,7 +364,7 @@ def test_mfnet_mo(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_ty
     return task_top1s
 
 def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_file, use_flow=False, one_obj_layer=False,
-                      ensemble=False, multioutput_loss=0):
+                      ensemble=False, multioutput_loss=0, eval_branch=None):
     num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks, num_c_tasks = task_sizes
     losses = AverageMeter()
     top1_meters = [AverageMeter() for _ in range(num_cls_tasks)]
@@ -419,8 +419,11 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
                     txt_batch_preds += ", "
                     if multioutput_loss:
                         sum_outputs = torch.zeros_like(outputs[ind][0][j])
-                        for o in outputs[ind]:
-                            sum_outputs += o[j].softmax(-1)
+                        if eval_branch is not None:
+                            sum_outputs += outputs[ind][eval_branch][j].softmax(-1)
+                        else:
+                            for o in outputs[ind]:
+                                sum_outputs += o[j].softmax(-1)
                         res = np.argmax(sum_outputs.detach().cpu().numpy())
                     else:
                         res = np.argmax(outputs[ind][j].detach().cpu().numpy())
@@ -433,8 +436,13 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
             for ind in range(num_cls_tasks):
                 if multioutput_loss:
                     sum_outputs = torch.zeros_like(outputs[ind][0])
-                    for o in outputs[ind]:
-                        sum_outputs += o.softmax(-1)
+                    if eval_branch is not None:
+                        sum_outputs += outputs[ind][eval_branch].softmax(-1)
+                    else:
+                        for o in outputs[ind]:
+                            sum_outputs += o.softmax(-1)
+                    # for o in outputs[ind]:
+                    #     sum_outputs += o.softmax(-1)
                     t1, t5 = accuracy(sum_outputs.detach().cpu(), targets[ind].detach().cpu().long(), topk=(1, 5))
                 else:
                     t1, t5 = accuracy(outputs[ind].detach().cpu(), targets[ind].detach().cpu().long(), topk=(1, 5))
