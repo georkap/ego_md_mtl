@@ -17,9 +17,9 @@ from src.models.layers import CoordRegressionLayer, MultitaskClassifiers, Object
 from src.utils.initializer import xavier
 from torch.functional import F
 
-class MFNET_3D(nn.Module):
+class MFNET_3D_MO(nn.Module):
     def __init__(self, num_classes, dropout=None, **kwargs):
-        super(MFNET_3D, self).__init__()
+        super(MFNET_3D_MO, self).__init__()
         # support for arbitrary number of output layers, but it is the user's job to make sure they make sense
         # (e.g. actions->actions and not actions->verbs,nouns etc.)
         self.num_classes = num_classes
@@ -171,7 +171,6 @@ class MFNET_3D(nn.Module):
                 h_out = [h_out, h_ens]
                 return h_out, coords, heatmaps, probabilities, objects, cat_obj
 
-            # return [h_out], coords, heatmaps, probabilities, objects, cat_obj
             return h_out, coords, heatmaps, probabilities, objects, cat_obj
 
 
@@ -217,7 +216,7 @@ if __name__ == "__main__":
     # ---------
     kwargs = {'num_coords': 0, 'num_objects': None, 'num_obj_cat': None, 'one_object_layer': True,
               'ensemble_eval': False}
-    net = MFNET_3D(num_classes=[2513, 125, 352], dropout=0.5, **kwargs)
+    net = MFNET_3D_MO(num_classes=[2513, 125, 352], dropout=0.5, **kwargs)
     data = torch.randn(1, 3, 16, 224, 224, requires_grad=True)
     net.cuda()
     data = data.cuda()

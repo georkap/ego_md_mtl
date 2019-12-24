@@ -8,6 +8,7 @@ dataset loader utils such as:
 
 @author: Γιώργος
 """
+from typing import Optional
 
 import numpy as np
 import cv2
@@ -418,3 +419,24 @@ def get_scale_and_shift(_transforms, orig_norm_val):
         tl_x = 0
         tl_y = 0
     return sc_w / orig_width, sc_h / orig_height, tl_x, tl_y, is_flipped, is_training
+
+def roll(x: torch.Tensor, shift: int, dim: int = -1, fill_pad: Optional[int] = None):
+    # from https://discuss.pytorch.org/t/implementation-of-function-like-numpy-roll/964/8
+    if 0 == shift:
+        return x
+
+    elif shift < 0:
+        shift = -shift
+        gap = x.index_select(dim, torch.arange(shift, device=x.device))
+        if fill_pad is not None:
+            gap = fill_pad * torch.ones_like(gap, device=x.device)
+        return torch.cat([x.index_select(dim, torch.arange(shift, x.size(dim), device=x.device)),
+                          gap], dim=dim)
+
+    else:
+        shift = x.size(dim) - shift
+        gap = x.index_select(dim, torch.arange(shift, x.size(dim)))
+        if fill_pad is not None:
+            gap = fill_pad * torch.ones_like(gap, device=x.device)
+        return torch.cat([gap, x.index_select(dim, torch.arange(shift))], dim=dim)
+
