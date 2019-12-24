@@ -440,3 +440,14 @@ def roll(x: torch.Tensor, shift: int, dim: int = -1, fill_pad: Optional[int] = N
             gap = fill_pad * torch.ones_like(gap, device=x.device)
         return torch.cat([gap, x.index_select(dim, torch.arange(shift))], dim=dim)
 
+def roll2(x, shift, dim):
+    # negative shift means that we move abs(shift) data from the beginning to the end of the tensor and shift the x.size-shift data to beginning.
+    # positive shift means that we move shift data towards the end of the tensor and substitute the places in the beginning with the moved data from the end of the tensor
+    if shift < 0:
+        shift = -shift
+        rolled_data = torch.cat([x[:, :, shift:], x[:, :, :shift]], dim=dim)
+    elif shift > 0:
+        rolled_data = torch.cat([x[:, :, :shift], x[:, :, shift:]], dim=dim)
+    else:
+        rolled_data = x
+    return rolled_data

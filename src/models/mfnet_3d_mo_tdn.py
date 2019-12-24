@@ -16,7 +16,7 @@ import torch.nn as nn
 from src.models.layers import CoordRegressionLayer, MultitaskClassifiers, ObjectPresenceLayer, MF_UNIT, get_norm_layers
 from src.utils.initializer import xavier
 from torch.functional import F
-from src.utils.dataset.dataset_loader_transforms import roll
+from src.utils.dataset.dataset_loader_transforms import roll2 as roll
 
 class MFNET_3D_TDN(nn.Module):
     def __init__(self, num_classes, dropout=None, **kwargs):
