@@ -298,6 +298,12 @@ def load_pretrained_weights(model_ft, args):
         for i, key in enumerate(conv5_keys):
             new_key = key.replace('conv5', 'conv5_2')
             base_dict[new_key] = base_dict[key]
+    if args.tdn:
+        for i in range(1, 6):
+            conv_keys = [k for k in list(base_dict.keys()) if k.startswith('conv{}'.format(i))]
+            for k, key in enumerate(conv_keys):
+                new_key = key.replace('conv{}'.format(i), 'conv{}_tdn'.format(i))
+                base_dict[new_key] = base_dict[key]
     if args.flow: # load the pretrained weights to both the 'rgb' and 'flow' streams
         rgb_branch = getattr(model_ft, 'RGB')
         rgb_branch.load_state_dict(base_dict, strict=False)

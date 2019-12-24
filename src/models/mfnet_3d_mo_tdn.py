@@ -51,7 +51,7 @@ class MFNET_3D_TDN(nn.Module):
             conv1normlayer,
             ('relu', nn.ReLU(inplace=True))
         ]))
-        self.conv1_tdm = nn.Sequential(OrderedDict([
+        self.conv1_tdn = nn.Sequential(OrderedDict([
             ('conv', nn.Conv3d(in_ch, c1_out, kernel_size=(3, 5, 5), padding=(1, 2, 2), stride=(1, 2, 2), bias=False)),
             conv1normlayer,
             ('relu', nn.ReLU(inplace=True))
@@ -67,7 +67,7 @@ class MFNET_3D_TDN(nn.Module):
                                   norm=self.norm)) for i in range(1, k_sec[2]+1)
         ]))
 
-        self.conv2_tdm = nn.Sequential(OrderedDict([
+        self.conv2_tdn = nn.Sequential(OrderedDict([
             ("B%02d" % i, MF_UNIT(num_in=c1_out if i == 1 else c2_out, num_mid=num_mid, num_out=c2_out,
                                   stride=(2, 1, 1) if i == 1 else (1, 1, 1), g=groups, first_block=(i == 1),
                                   norm=self.norm)) for i in range(1, k_sec[2] + 1)
@@ -81,7 +81,7 @@ class MFNET_3D_TDN(nn.Module):
                                   norm=self.norm)) for i in range(1, k_sec[3]+1)
         ]))
 
-        self.conv3_tdm = nn.Sequential(OrderedDict([
+        self.conv3_tdn = nn.Sequential(OrderedDict([
             ("B%02d" % i, MF_UNIT(num_in=c2_out if i == 1 else c3_out, num_mid=num_mid, num_out=c3_out,
                                   stride=(1, 2, 2) if i == 1 else (1, 1, 1), g=groups, first_block=(i == 1),
                                   norm=self.norm)) for i in range(1, k_sec[3] + 1)
@@ -94,7 +94,7 @@ class MFNET_3D_TDN(nn.Module):
                                   stride=(1, 2, 2) if i == 1 else (1, 1, 1), g=groups, first_block=(i == 1),
                                   norm=self.norm)) for i in range(1, k_sec[4]+1)
         ]))
-        self.conv4_tdm = nn.Sequential(OrderedDict([
+        self.conv4_tdn = nn.Sequential(OrderedDict([
             ("B%02d" % i, MF_UNIT(num_in=c3_out if i == 1 else c4_out, num_mid=num_mid, num_out=c4_out,
                                   stride=(1, 2, 2) if i == 1 else (1, 1, 1), g=groups, first_block=(i == 1),
                                   norm=self.norm)) for i in range(1, k_sec[4] + 1)
@@ -107,7 +107,7 @@ class MFNET_3D_TDN(nn.Module):
                                   stride=(1, 2, 2) if i == 1 else (1, 1, 1), g=groups, first_block=(i == 1),
                                   norm=self.norm)) for i in range(1, k_sec[5]+1)
         ]))
-        self.conv5_tdm = nn.Sequential(OrderedDict([
+        self.conv5_tdn = nn.Sequential(OrderedDict([
             ("B%02d" % i, MF_UNIT(num_in=c4_out if i == 1 else c5_out, num_mid=num_mid, num_out=c5_out,
                                   stride=(1, 2, 2) if i == 1 else (1, 1, 1), g=groups, first_block=(i == 1),
                                   norm=self.norm)) for i in range(1, k_sec[5]+1)
@@ -144,19 +144,17 @@ class MFNET_3D_TDN(nn.Module):
         xavier(net=self)
 
     def forward(self, x):
-        x_diff = roll(x, shift=-1, dim=2) - x
-
-        h_diff = self.conv1_tdm(x_diff)
+        h_diff = self.conv1_tdn(roll(x, shift=-1, dim=2) - x)
         h_diff = self.maxpool(h_diff)  # x112 ->  x56
         h = self.conv1(x)   # x224 -> x112
         h = self.maxpool(h)  # x112 ->  x56
-        h_diff = self.conv2_tdm(h_diff + (roll(h, shift=-1, dim=2) - h))
+        h_diff = self.conv2_tdn(h_diff + (roll(h, shift=-1, dim=2) - h))
         h = self.conv2(h)  # x56 ->  x56
-        h_diff = self.conv3_tdm(h_diff + (roll(h, shift=-1, dim=2) - h))
+        h_diff = self.conv3_tdn(h_diff + (roll(h, shift=-1, dim=2) - h))
         h = self.conv3(h)  # x56 ->  x28
-        h_diff = self.conv4_tdm(h_diff + (roll(h, shift=-1, dim=2) - h))
+        h_diff = self.conv4_tdn(h_diff + (roll(h, shift=-1, dim=2) - h))
         h = self.conv4(h)  # x28 ->  x14
-        h_diff = self.conv5_tdm(h_diff + (roll(h, shift=-1, dim=2) - h))
+        h_diff = self.conv5_tdn(h_diff + (roll(h, shift=-1, dim=2) - h))
         h = self.conv5(h)  # x14 ->   x7
 
         h = self.tail(h)
