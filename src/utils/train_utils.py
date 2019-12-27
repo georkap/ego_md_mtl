@@ -391,12 +391,11 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
                 for ens_out in ens_outputs:
                     for task_id, task_out in enumerate(ens_out):
                         for j, unbatched_outs in enumerate(task_out):
-                            res = np.argmax(task_out.detach().cpu().numpy())
+                            res = np.argmax(unbatched_outs.detach().cpu().numpy())
                             label = targets[task_id][j].detach().cpu().numpy()
                             if res == label: # found tp in ensemble
-                                ensemble_outputs[task_id][j] = task_out
+                                ensemble_outputs[task_id][j] = unbatched_outs
                 outputs = ensemble_outputs
-
 
             if multioutput_loss:
                 temp_outputs = []
