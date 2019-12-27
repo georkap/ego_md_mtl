@@ -441,7 +441,7 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
                 batch_preds.append(txt_batch_preds)
 
             losses.update(loss.item(), batch_size)
-            for ind in range(num_cls_tasks):
+            for task_id in range(num_cls_tasks):
                 if multioutput_loss:
                     sum_outputs = torch.zeros_like(outputs[task_id][0])
                     if eval_branch is not None:
