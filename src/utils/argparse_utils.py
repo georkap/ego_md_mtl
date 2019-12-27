@@ -102,6 +102,7 @@ def parse_args_eval(parser):
     # sampler and window apply to evaluation during training as well
     parser.add_argument('--eval_sampler', type=str, default='random', choices=['middle', 'random', 'sequential', 'doublefull'])
     parser.add_argument('--eval_crop', type=str, default='random', choices=['center', 'random'])
+    parser.add_argument('--eval_ensemble', default=None, choices=[None, 'all', 'best'])
     # it is a good design choice during evaluation to use a temporal window for the video
     # that lasts approx. 1 second, i.e. 32 frames for EGTEA and 64 for EPIC KITCHENS
     parser.add_argument('--eval_window', type=int, default=32)

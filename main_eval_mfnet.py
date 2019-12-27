@@ -95,6 +95,7 @@ def main():
     kwargs["num_objects"] = num_objects
     kwargs["num_obj_cat"] = num_obj_cat
     kwargs["one_object_layer"] = args.one_object_layer
+    kwargs["ensemble_eval"] = True if args.eval_ensemble is not None else False # for the network param, we dont care what the ensemble data will be used for
     if args.long:
         kwargs["k_sec"] = {2: 3, 3: 4, 4: 11, 5: 3}
     model_ft = mfnet_3d(num_classes, **kwargs)
@@ -140,9 +141,10 @@ def main():
                                                num_workers=args.num_workers, pin_memory=True)
 
         # evaluate dataset
-        top1, outputs = validate(model_ft, val_iter, objectives, checkpoint['epoch'], args.dataset, log_file, args.flow,
-                                 one_obj_layer=args.one_object_layer, multioutput_loss=multioutput_loss,
-                                 eval_branch=args.eval_branch)
+        top1, outputs = validate(model_ft, val_iter, objectives, checkpoint['epoch'], args.dataset, log_file,
+                                 use_flow=args.flow, one_obj_layer=args.one_object_layer,
+                                 multioutput_loss=multioutput_loss, eval_branch=args.eval_branch,
+                                 eval_ensemble=args.eval_ensemble)
 
         # calculate statistics
         for ind in range(len(num_classes)):
