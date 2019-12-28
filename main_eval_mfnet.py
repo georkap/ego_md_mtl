@@ -40,7 +40,7 @@ from src.utils.dataset.dataset_loader import MultitaskDatasetLoader
 from src.utils.dataset.dataset_loader_transforms import Resize, RandomCrop, ToTensorVid, Normalize, CenterCrop
 from src.utils.calc_utils import eval_final_print_mt
 from src.utils.video_sampler import RandomSampling, MiddleSampling
-from src.utils.train_utils import validate_mfnet_mo
+from src.utils.train_utils import validate_mfnet_mo, validate_mfnet_mo_gaze
 from src.constants import *
 
 np.set_printoptions(linewidth=np.inf, threshold=np.inf)
@@ -89,7 +89,6 @@ def main():
         multioutput_loss = 3
     else:
         mfnet_3d = MFNET_3D_MO
-    validate = validate_mfnet_mo
 
     kwargs['num_coords'] = num_coords
     kwargs["num_objects"] = num_objects
@@ -140,11 +139,19 @@ def main():
         val_iter = torch.utils.data.DataLoader(val_loader, batch_size=args.batch_size, shuffle=False,
                                                num_workers=args.num_workers, pin_memory=True)
 
-        # evaluate dataset
+        # evaluate single dataset
+        if args.eval_gaze:
+            validate = validate_mfnet_mo_gaze
+        else:
+            validate = validate_mfnet_mo
+
         top1, outputs = validate(model_ft, val_iter, objectives, checkpoint['epoch'], args.dataset, log_file,
                                  use_flow=args.flow, one_obj_layer=args.one_object_layer,
                                  multioutput_loss=multioutput_loss, eval_branch=args.eval_branch,
                                  eval_ensemble=args.eval_ensemble)
+
+        if args.eval_gaze:
+            return
 
         # calculate statistics
         for ind in range(len(num_classes)):

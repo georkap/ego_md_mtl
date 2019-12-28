@@ -34,7 +34,9 @@ def calc_auc(pred, gt):
 def inner_batch_calc(_model, _inputs, _gaze_targets, _or_targets, _frame_counter, _actual_frame_counter, _aae_frame,
                      _auc_frame, _aae_temporal, _auc_temporal, _to_print, _log_file, _mf_remaining=8):
 
-    _outputs, _coords, _heatmaps = _model(_inputs)
+    # _outputs, _coords, _heatmaps = _model(_inputs)
+    network_output = _model(_inputs)
+    _outputs, _coords, _heatmaps, _probabilities, _objects, _obj_cat = network_output
 
     _gaze_coords = _coords[:, :, 0, :]
     _gaze_coords = unnorm_gaze_coords(_gaze_coords).cpu().numpy()

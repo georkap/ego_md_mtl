@@ -469,8 +469,8 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
     return [tasktop1.avg for tasktop1 in top1_meters], task_outputs
 
 
-def validate_mfnet_mo_gaze(model, test_iterator, num_outputs, use_gaze, use_hands, cur_epoch, dataset, log_file):
-    # TODO: add updated code for flow
+def validate_mfnet_mo_gaze(model, test_iterator, task_sizes, cur_epoch, dataset, log_file, use_flow=False, **kwargs):
+    num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks, num_c_tasks = task_sizes
     auc_frame, auc_temporal = AverageMeter(), AverageMeter()
     aae_frame, aae_temporal = AverageMeter(), AverageMeter()
     print_and_save('Evaluating after epoch: {} on {} set'.format(cur_epoch, dataset), log_file)
@@ -480,24 +480,22 @@ def validate_mfnet_mo_gaze(model, test_iterator, num_outputs, use_gaze, use_hand
         frame_counter = 0
         actual_frame_counter = 0
         video_counter = 0
-        for batch_idx, (inputs, targets, orig_gaze, video_names) in enumerate(test_iterator):
-            video_counter += 1
-            to_print = '[Batch {}/{}]'.format(batch_idx, len(test_iterator))
-
-            inputs = inputs.cuda()
+        for batch_idx, data in enumerate(test_iterator):
+            inputs, targets, orig_gaze, video_names = init_inputs(data=data, use_flow=use_flow, base_gpu=None)
+            batch_size = targets.shape[0]
             targets = targets.cuda().transpose(0, 1)
             orig_gaze = orig_gaze.cuda().transpose(0, 1)
+
+            video_counter += 1
+            to_print = '[Batch {}/{}]'.format(batch_idx, len(test_iterator))
 
             double_temporal_size = inputs.shape[2]
             temporal_size = double_temporal_size // 2
 
-            if use_gaze or use_hands:
-                cls_targets = targets[:num_outputs, :].long()
-            else:
-                cls_targets = targets
-            assert len(cls_targets) == num_outputs
+            cls_targets = targets[:num_cls_tasks, :].long()
+            assert len(cls_targets) == num_cls_tasks
 
-            gaze_targets = targets[num_outputs:num_outputs + 2*temporal_size, :].transpose(1, 0).reshape(-1, temporal_size, 1, 2)
+            gaze_targets = targets[num_cls_tasks:num_cls_tasks + 2*temporal_size, :].transpose(1, 0).reshape(-1, temporal_size, 1, 2)
             gaze_targets.squeeze_(2)
             gaze_targets = unnorm_gaze_coords(gaze_targets).cpu().numpy()
 
@@ -528,6 +526,8 @@ def validate_mfnet_mo_gaze(model, test_iterator, num_outputs, use_gaze, use_hand
         to_print = 'Evaluated in total {}/{} frames in {} video segments.'.format(frame_counter, actual_frame_counter,
                                                                                   video_counter)
         print_and_save(to_print, log_file)
+
+        return None, None
 
 def validate_mfnet_mo_json(model, test_iterator, dataset, action_file):
     # TODO: add updated code for flow
