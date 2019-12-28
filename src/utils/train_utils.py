@@ -384,10 +384,13 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
             # outputs, coords, heatmaps, probabilities, objects, obj_cat = model(inputs)
             network_output = model(inputs)
             outputs, coords, heatmaps, probabilities, objects, obj_cat = network_output
+
             if eval_ensemble is not None: # only compatible for multioutput_loss ==False for now
                 assert not multioutput_loss
                 full_outputs, ens_outputs = outputs
                 ensemble_outputs = full_outputs.copy()
+                ens_found = [[0 for __ in range(num_cls_tasks)] for _ in range(batch_size)]
+                found = [[0 for __ in range(num_cls_tasks)] for _ in range(batch_size)]
                 for ens_out in ens_outputs:
                     for task_id, task_out in enumerate(ens_out):
                         for j, unbatched_outs in enumerate(task_out):
@@ -395,6 +398,13 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
                             label = targets[task_id][j].detach().cpu().numpy()
                             if res == label: # found tp in ensemble
                                 ensemble_outputs[task_id][j] = unbatched_outs
+                                ens_found[j][task_id] += 1
+                for task_id, task_out in enumerate(outputs):
+                    for j, unbatched_outs in enumerate(task_out):
+                        res = np.argmax(unbatched_outs.detach().cpu().numpy())
+                        label = targets[task_id][j].detach().cpu().numpy()
+                        if res == label: # found tp in outputs
+                            found[j][task_id] = 1
                 outputs = ensemble_outputs
 
             if multioutput_loss:
@@ -418,7 +428,6 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
             loss, partial_losses = get_mtl_losses(targets, masks, per_task_outputs, task_sizes, one_obj_layer, counts,
                                                   is_training=False, multioutput_loss=multioutput_loss)
 
-
             # save predictions for evaluation afterwards
             batch_preds = []
             for j in range(batch_size):
@@ -438,6 +447,8 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
                     label = targets[task_id][j].detach().cpu().numpy()
                     task_outputs[task_id].append([res, label])
                     txt_batch_preds += "T{} P-L:{}-{}".format(task_id, res, label)
+                    if eval_ensemble:
+                        txt_batch_preds += ": {} : {}".format(ens_found[j][task_id], found[j][task_id])
                 batch_preds.append(txt_batch_preds)
 
             losses.update(loss.item(), batch_size)
@@ -449,8 +460,6 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
                     else:
                         for o in outputs[task_id]:
                             sum_outputs += o.softmax(-1)
-                    # for o in outputs[ind]:
-                    #     sum_outputs += o.softmax(-1)
                     t1, t5 = accuracy(sum_outputs.detach().cpu(), targets[task_id].detach().cpu().long(), topk=(1, 5))
                 else:
                     t1, t5 = accuracy(outputs[task_id].detach().cpu(), targets[task_id].detach().cpu().long(), topk=(1, 5))
