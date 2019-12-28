@@ -69,8 +69,8 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
                  validation=False, eval_gaze=False, vis_data=False, use_flow=False, flow_transforms=None,
                  only_flow=False):
         self.sampler = sampler
-        assert len(dataset_names) == len(
-            tasks_per_dataset)  # 1-1 association between dataset name, split file and resp tasks
+        # 1-1 association between dataset name, split file and resp tasks
+        assert len(dataset_names) == len(tasks_per_dataset)
         self.video_list = list()
         self.dataset_infos = dict()
         self.maximum_target_size = 0
@@ -335,8 +335,7 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
         elif self.eval_gaze and use_gaze:  # this is not refined code
             gaze_data = load_pickle(gaze_path)
             orig_gaze = np.array([[value[0], value[1]] for key, value in gaze_data.items()], dtype=np.float32).flatten()
-            to_return = (clip_rgb, clip_flow, labels, dataset_id, orig_gaze, uid) if self.use_flow else (
-                clip_rgb, labels, dataset_id, orig_gaze, uid)
+            to_return = (clip_rgb, clip_flow, labels, orig_gaze, uid) if self.use_flow else (clip_rgb, labels, orig_gaze, uid)
         elif self.only_flow:
             to_return = (clip_flow, labels, masks, dataset_id)
         else:

@@ -136,7 +136,7 @@ def main():
                                             hand_list_prefix=args.hand_list_prefix[:],
                                             object_list_prefix=args.object_list_prefix[:],
                                             object_categories=args.object_cats[:],
-                                            validation=True,
+                                            validation=True, eval_gaze=args.eval_gaze,
                                             use_flow=args.flow, flow_transforms=val_transforms_flow)
         val_iter = torch.utils.data.DataLoader(val_loader, batch_size=args.batch_size, shuffle=False,
                                                num_workers=args.num_workers, pin_memory=True)
