@@ -39,7 +39,7 @@ from src.utils.file_utils import print_and_save
 from src.utils.dataset.dataset_loader import MultitaskDatasetLoader
 from src.utils.dataset.dataset_loader_transforms import Resize, RandomCrop, ToTensorVid, Normalize, CenterCrop
 from src.utils.calc_utils import eval_final_print_mt
-from src.utils.video_sampler import RandomSampling, MiddleSampling
+from src.utils.video_sampler import RandomSampling, MiddleSampling, DoubleFullSampling
 from src.utils.train_utils import validate_mfnet_mo, validate_mfnet_mo_gaze
 from src.constants import *
 
@@ -121,6 +121,8 @@ def main():
         crop_type = CenterCrop((224, 224)) if args.eval_crop == 'center' else RandomCrop((224, 224))
         if args.eval_sampler == 'middle':
             val_sampler = MiddleSampling(num=args.clip_length, window=args.eval_window)
+        elif args.eval_sampler == 'doublefull':
+            val_sampler = DoubleFullSampling()
         else:
             val_sampler = RandomSampling(num=args.clip_length, interval=args.frame_interval, speed=[1.0, 1.0], seed=i)
 
