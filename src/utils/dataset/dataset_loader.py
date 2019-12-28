@@ -330,12 +330,13 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
                 to_return = (clip_rgb, clip_flow, labels, masks, uid)
             elif self.only_flow:
                 to_return = (clip_flow, labels, masks, uid)
+            elif self.eval_gaze and use_gaze:  # this is not refined code
+                gaze_data = load_pickle(gaze_path)
+                orig_gaze = np.array([[value[0], value[1]] for key, value in gaze_data.items()],
+                                     dtype=np.float32).flatten()
+                to_return = (clip_rgb, clip_flow, labels, orig_gaze, uid) if self.use_flow else (clip_rgb, labels, orig_gaze, uid)
             else:
                 to_return = (clip_rgb, labels, masks, uid)
-        elif self.eval_gaze and use_gaze:  # this is not refined code
-            gaze_data = load_pickle(gaze_path)
-            orig_gaze = np.array([[value[0], value[1]] for key, value in gaze_data.items()], dtype=np.float32).flatten()
-            to_return = (clip_rgb, clip_flow, labels, orig_gaze, uid) if self.use_flow else (clip_rgb, labels, orig_gaze, uid)
         elif self.only_flow:
             to_return = (clip_flow, labels, masks, dataset_id)
         else:
