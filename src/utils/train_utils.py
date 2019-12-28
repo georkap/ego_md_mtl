@@ -399,7 +399,7 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
                             if res == label: # found tp in ensemble
                                 ensemble_outputs[task_id][j] = unbatched_outs
                                 ens_found[j][task_id] += 1
-                for task_id, task_out in enumerate(outputs):
+                for task_id, task_out in enumerate(full_outputs):
                     for j, unbatched_outs in enumerate(task_out):
                         res = np.argmax(unbatched_outs.detach().cpu().numpy())
                         label = targets[task_id][j].detach().cpu().numpy()
