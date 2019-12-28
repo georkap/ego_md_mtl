@@ -388,9 +388,15 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
             if eval_ensemble is not None: # only compatible for multioutput_loss ==False for now
                 assert not multioutput_loss
                 full_outputs, ens_outputs = outputs
+                found = [[0 for __ in range(num_cls_tasks)] for _ in range(batch_size)]
+                for task_id, task_out in enumerate(full_outputs):
+                    for j, unbatched_outs in enumerate(task_out):
+                        res = np.argmax(unbatched_outs.detach().cpu().numpy())
+                        label = targets[task_id][j].detach().cpu().numpy()
+                        if res == label: # found tp in outputs
+                            found[j][task_id] = 1
                 ensemble_outputs = full_outputs.copy()
                 ens_found = [[0 for __ in range(num_cls_tasks)] for _ in range(batch_size)]
-                found = [[0 for __ in range(num_cls_tasks)] for _ in range(batch_size)]
                 for ens_out in ens_outputs:
                     for task_id, task_out in enumerate(ens_out):
                         for j, unbatched_outs in enumerate(task_out):
@@ -399,12 +405,6 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
                             if res == label: # found tp in ensemble
                                 ensemble_outputs[task_id][j] = unbatched_outs
                                 ens_found[j][task_id] += 1
-                for task_id, task_out in enumerate(full_outputs):
-                    for j, unbatched_outs in enumerate(task_out):
-                        res = np.argmax(unbatched_outs.detach().cpu().numpy())
-                        label = targets[task_id][j].detach().cpu().numpy()
-                        if res == label: # found tp in outputs
-                            found[j][task_id] = 1
                 outputs = ensemble_outputs
 
             if multioutput_loss:
