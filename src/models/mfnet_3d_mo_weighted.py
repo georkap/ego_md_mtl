@@ -17,9 +17,9 @@ from src.models.layers import CoordRegressionLayer, MultitaskClassifiers, Object
 from src.utils.initializer import xavier
 from torch.functional import F
 
-class MFNET_3D_MO(nn.Module):
+class MFNET_3D_MO_WEIGHTED(nn.Module):
     def __init__(self, num_classes, dropout=None, **kwargs):
-        super(MFNET_3D_MO, self).__init__()
+        super(MFNET_3D_MO_WEIGHTED, self).__init__()
         # support for arbitrary number of output layers, but it is the user's job to make sure they make sense
         # (e.g. actions->actions and not actions->verbs,nouns etc.)
         self.num_classes = num_classes
@@ -92,114 +92,74 @@ class MFNET_3D_MO(nn.Module):
         # final
         self.tail = nn.Sequential(OrderedDict([tailnorm, ('relu', nn.ReLU(inplace=True))]))
 
+        self.attn = nn.Sequential()
+        self.attn.add_module('soft', nn.Softmax(dim=1))
+        self.attn.add_module('attn', nn.Linear(c5_out * self.t_dim_in//2, self.t_dim_in // 2))
         self.globalpool = nn.Sequential()
-        self.globalpool.add_module('avg', nn.AvgPool3d(kernel_size=(self.t_dim_in // 2, self.s_dim_in // 32,
-                                                                    self.s_dim_in // 32), stride=(1, 1, 1)))
+        self.globalpool.add_module('avg', nn.AvgPool3d(kernel_size=(self.t_dim_in // 2, self.s_dim_in // 32, self.s_dim_in // 32),
+                                                       stride=(1, 1, 1)))
 
         if dropout:
             self.globalpool.add_module('dropout', nn.Dropout(p=dropout))
+            self.add_module('dropout', nn.Dropout(p=dropout))
 
         self.classifier_list = MultitaskClassifiers(c5_out, num_classes)
 
-        if self.num_objects:
-            for ii, no in enumerate(self.num_objects): # if there are more than one object presence layers, e.g. one per dataset
-                object_presence_layer = ObjectPresenceLayer(c5_out, no, one_layer=self.one_object_layer)
-                self.add_module('object_presence_layer_{}'.format(ii), object_presence_layer)
-        if self.num_obj_cat:
-            for ii, no in enumerate(self.num_obj_cat):
-                object_presence_layer = ObjectPresenceLayer(c5_out, no, one_layer=self.one_object_layer)
-                self.add_module('objcat_presence_layer_{}'.format(ii), object_presence_layer)
+        # if self.num_objects:
+            # for ii, no in enumerate(self.num_objects): # if there are more than one object presence layers, e.g. one per dataset
+            #     object_presence_layer = ObjectPresenceLayer(c5_out, no, one_layer=self.one_object_layer)
+            #     self.add_module('object_presence_layer_{}'.format(ii), object_presence_layer)
+        # if self.num_obj_cat:
+            # for ii, no in enumerate(self.num_obj_cat):
+            #     object_presence_layer = ObjectPresenceLayer(c5_out, no, one_layer=self.one_object_layer)
+            #     self.add_module('objcat_presence_layer_{}'.format(ii), object_presence_layer)
         #############
         # Initialization
         xavier(net=self)
 
-    def forward(self, x, upto=None):
-        if upto is None:
-            assert x.shape[2] == 16
-
-            h = self.conv1(x)   # x224 -> x112
-            # print(h.shape)
-            h = self.maxpool(h)  # x112 ->  x56
-            # print(h.shape)
-            h = self.conv2(h)  # x56 ->  x56
-            # print(h.shape)
-            h = self.conv3(h)  # x56 ->  x28
-            # print(h.shape)
-            h = self.conv4(h)  # x28 ->  x14
-            # print(h.shape)
-            h = self.conv5(h)  # x14 ->   x7
-            # print(h.shape)
-
-            h = self.tail(h)
-            coords, heatmaps, probabilities = None, None, None
-            if self.num_coords > 0:
-                coords, heatmaps, probabilities = self.coord_layers(h)
-
-            if not self.training and self.ensemble_eval: # not fully supported yet
-                h_ens = F.avg_pool3d(h, (1, self.s_dim_in//32, self.s_dim_in//32), (1, 1, 1))
-                h_ens = h_ens.view(h_ens.shape[0], h_ens.shape[1], -1)
-                h_ens = [self.classifier_list(h_ens[:, :, ii]) for ii in range(h_ens.shape[2])]
-
-            h = self.globalpool(h)
-            h = h.view(h.shape[0], -1)
-            h_out = self.classifier_list(h)
-
-            objects = None
-            if self.num_objects:
-                objects = [self.__getattr__('object_presence_layer_{}'.format(ii))(h) for ii in range(len(self.num_objects))]
-            cat_obj = None
-            if self.num_obj_cat:
-                cat_obj = [self.__getattr__('objcat_presence_layer_{}'.format(ii))(h) for ii in range(len(self.num_obj_cat))]
-            if not self.training and self.ensemble_eval:
-                h_out = [h_out, h_ens]
-                return h_out, coords, heatmaps, probabilities, objects, cat_obj
-
-            return h_out, coords, heatmaps, probabilities, objects, cat_obj
-
-
-        elif upto == 'shared':
-            return self.forward_shared_block(x)
-        elif upto == 'cls':
-            return self.forward_cls_layers(x)
-        elif upto == 'coord':
-            return self.forward_coord_layers(x)
-    
-    def forward_shared_block(self, x):
-        assert x.shape[2] == 16
-
+    def forward(self, x):
         h = self.conv1(x)   # x224 -> x112
         h = self.maxpool(h)  # x112 ->  x56
-
         h = self.conv2(h)  # x56 ->  x56
         h = self.conv3(h)  # x56 ->  x28
         h = self.conv4(h)  # x28 ->  x14
         h = self.conv5(h)  # x14 ->   x7
 
-        h_tail = self.tail(h)
-
-        h = self.globalpool(h_tail)
-
-        h = h.view(h.shape[0], -1)
-
-        return h, h_tail
-
-    def forward_coord_layers(self, h_tail):
+        h = self.tail(h)
         coords, heatmaps, probabilities = None, None, None
         if self.num_coords > 0:
-            coords, heatmaps, probabilities = self.coord_layers(h_tail)
-        return coords, heatmaps, probabilities
+            coords, heatmaps, probabilities = self.coord_layers(h)
 
-    def forward_cls_layers(self, h):
+        h_ens = F.avg_pool3d(h, (1, self.s_dim_in//32, self.s_dim_in//32), (1, 1, 1))
+        if hasattr(self, 'dropout'):
+            h_ens = self.dropout(h_ens)
+        h_ens = h_ens.view(h_ens.shape[0], -1)
+
+        attention = self.attn(h_ens)
+
+        h = attention * h.transpose(2, 4)
+        h = h.transpose(4, 2)
+        # h = torch.bmm(attention.unsqueeze(1), h.transpose(1, 2))
+        h = self.globalpool(h)
+        h = h.view(h.shape[0], -1)
         h_out = self.classifier_list(h)
-        return h_out
 
+        objects = None
+        # if self.num_objects:
+        #     objects = [self.__getattr__('object_presence_layer_{}'.format(ii))(h) for ii in range(len(self.num_objects))]
+        cat_obj = None
+        # if self.num_obj_cat:
+        #     cat_obj = [self.__getattr__('objcat_presence_layer_{}'.format(ii))(h) for ii in range(len(self.num_obj_cat))]
+
+        h_out = [h_out, h_ens]
+        return h_out, coords, heatmaps, probabilities, objects, cat_obj
 
 if __name__ == "__main__":
     import torch, time
     # ---------
     kwargs = {'num_coords': 0, 'num_objects': None, 'num_obj_cat': None, 'one_object_layer': True,
               'ensemble_eval': False}
-    net = MFNET_3D_MO(num_classes=[2513, 125, 352], dropout=0.5, **kwargs)
+    net = MFNET_3D_MO_WEIGHTED(num_classes=[106, 19, 53], dropout=0.5, **kwargs)
     data = torch.randn(1, 3, 16, 224, 224, requires_grad=True)
     net.cuda()
     data = data.cuda()

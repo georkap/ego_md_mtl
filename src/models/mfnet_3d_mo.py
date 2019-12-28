@@ -198,8 +198,8 @@ if __name__ == "__main__":
     import torch, time
     # ---------
     kwargs = {'num_coords': 0, 'num_objects': None, 'num_obj_cat': None, 'one_object_layer': True,
-              'ensemble_eval': False}
-    net = MFNET_3D_MO(num_classes=[2513, 125, 352], dropout=0.5, **kwargs)
+              'ensemble_eval': True}
+    net = MFNET_3D_MO(num_classes=[106, 19, 53], dropout=0.5, **kwargs)
     data = torch.randn(1, 3, 16, 224, 224, requires_grad=True)
     net.cuda()
     data = data.cuda()
