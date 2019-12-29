@@ -34,6 +34,7 @@ from src.models.mfnet_3d_mo_mm import MFNET_3D_MO_MM
 from src.models.mfnet_3d_mo_dfb import MFNET_3D_DFB
 from src.models.mfnet_3d_mo_lstm import MFNET_3D_LSTM
 from src.models.mfnet_3d_mo_tdn import MFNET_3D_TDN
+from src.models.mfnet_3d_mo_weighted import MFNET_3D_MO_WEIGHTED
 from src.utils.argparse_utils import parse_args, make_log_file_name, parse_tasks_str, parse_tasks_per_dataset, compare_tasks_per_dataset
 from src.utils.file_utils import print_and_save
 from src.utils.dataset.dataset_loader import MultitaskDatasetLoader
@@ -84,6 +85,8 @@ def main():
         kwargs['mtl'] = args.mtl
         if args.mtl:
             multioutput_loss = 3
+    elif args.attn:
+        mfnet_3d = MFNET_3D_MO_WEIGHTED
     elif args.tdn:
         mfnet_3d = MFNET_3D_TDN
         multioutput_loss = 3
