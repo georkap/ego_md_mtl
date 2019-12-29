@@ -138,6 +138,12 @@ class MFNET_3D_MO_WEIGHTED(nn.Module):
         attention = self.attn(h_ens)
 
         h = attention.unsqueeze(-1).unsqueeze(-1).unsqueeze(1) * h
+
+        if not self.training and self.ensemble_eval:  # not fully supported yet
+            h_ens = F.avg_pool3d(h, (1, self.s_dim_in // 32, self.s_dim_in // 32), (1, 1, 1))
+            h_ens = h_ens.view(h_ens.shape[0], h_ens.shape[1], -1)
+            h_ens = [self.classifier_list(h_ens[:, :, ii]) for ii in range(h_ens.shape[2])]
+
         h = self.globalpool(h)
         h = h.view(h.shape[0], -1)
         h_out = self.classifier_list(h)
@@ -149,7 +155,10 @@ class MFNET_3D_MO_WEIGHTED(nn.Module):
         # if self.num_obj_cat:
         #     cat_obj = [self.__getattr__('objcat_presence_layer_{}'.format(ii))(h) for ii in range(len(self.num_obj_cat))]
 
-        # h_out = [h_out, h_ens]
+        if not self.training and self.ensemble_eval:
+            h_out = [h_out, h_ens]
+            return h_out, coords, heatmaps, probabilities, objects, cat_obj
+
         return h_out, coords, heatmaps, probabilities, objects, cat_obj
 
 if __name__ == "__main__":
