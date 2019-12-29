@@ -93,8 +93,8 @@ class MFNET_3D_MO_WEIGHTED(nn.Module):
         self.tail = nn.Sequential(OrderedDict([tailnorm, ('relu', nn.ReLU(inplace=True))]))
 
         self.attn = nn.Sequential()
-        self.attn.add_module('soft', nn.Softmax(dim=1))
         self.attn.add_module('attn', nn.Linear(c5_out * self.t_dim_in//2, self.t_dim_in // 2))
+        self.attn.add_module('soft', nn.Softmax(dim=1))
         self.globalpool = nn.Sequential()
         self.globalpool.add_module('avg', nn.AvgPool3d(kernel_size=(self.t_dim_in // 2, self.s_dim_in // 32, self.s_dim_in // 32),
                                                        stride=(1, 1, 1)))
@@ -137,9 +137,7 @@ class MFNET_3D_MO_WEIGHTED(nn.Module):
 
         attention = self.attn(h_ens)
 
-        h = attention * h.transpose(2, 4)
-        h = h.transpose(4, 2)
-        # h = torch.bmm(attention.unsqueeze(1), h.transpose(1, 2))
+        h = attention.unsqueeze(-1).unsqueeze(-1).unsqueeze(1) * h
         h = self.globalpool(h)
         h = h.view(h.shape[0], -1)
         h_out = self.classifier_list(h)
@@ -151,7 +149,7 @@ class MFNET_3D_MO_WEIGHTED(nn.Module):
         # if self.num_obj_cat:
         #     cat_obj = [self.__getattr__('objcat_presence_layer_{}'.format(ii))(h) for ii in range(len(self.num_obj_cat))]
 
-        h_out = [h_out, h_ens]
+        # h_out = [h_out, h_ens]
         return h_out, coords, heatmaps, probabilities, objects, cat_obj
 
 if __name__ == "__main__":
