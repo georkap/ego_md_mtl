@@ -396,23 +396,26 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
                         if res == label: # found tp in outputs
                             found[j][task_id] = 1
                 ensemble_outputs = full_outputs.copy()
-                ens_found = [[0 for __ in range(num_cls_tasks)] for _ in range(batch_size)]
-                connected = [['n' for __ in range(num_cls_tasks)] for _ in range(batch_size)]
-                for ens_out in ens_outputs:
+                ens_found = [["" for __ in range(num_cls_tasks)] for _ in range(batch_size)]
+                # connected = [['n' for __ in range(num_cls_tasks)] for _ in range(batch_size)]
+                for end_id, ens_out in enumerate(ens_outputs):
                     for task_id, task_out in enumerate(ens_out):
                         for j, unbatched_outs in enumerate(task_out):
                             res = np.argmax(unbatched_outs.detach().cpu().numpy())
                             label = targets[task_id][j].detach().cpu().numpy()
                             if res == label: # found tp in ensemble
                                 ensemble_outputs[task_id][j] = unbatched_outs
-                                ens_found[j][task_id] += 1
-                                if connected[j][task_id] == 'n': # if 'n'ot connected set 'c'onnected to True
-                                    connected[j][task_id] = 'c'
-                                elif connected[j][task_id] == 'd': # 1 connection 'd'ropped and found new correct ensemble
-                                    connected[j][task_id] = 'r' # 'r'econnected
-                            else: # if an ensemble part is not correct
-                                if connected[j][task_id] == 'c': # check if connected and set connection dropped
-                                    connected[j][task_id] = 'd'
+                                ens_found[j][task_id] += '1'
+                            else:
+                                ens_found[j][task_id] += '0'
+                                # ens_found[j][task_id] += 1
+                                # if connected[j][task_id] == 'n': # if 'n'ot connected set 'c'onnected to True
+                                #     connected[j][task_id] = 'c'
+                                # elif connected[j][task_id] == 'd': # 1 connection 'd'ropped and found new correct ensemble
+                                #     connected[j][task_id] = 'r' # 'r'econnected
+                            # else: # if an ensemble part is not correct
+                            #     if connected[j][task_id] == 'c': # check if connected and set connection dropped
+                            #         connected[j][task_id] = 'd'
 
                 outputs = ensemble_outputs
 
@@ -457,7 +460,7 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
                     task_outputs[task_id].append([res, label])
                     txt_batch_preds += "T{} P-L:{}-{}".format(task_id, res, label)
                     if eval_ensemble:
-                        txt_batch_preds += ": {}:{} : {}".format(ens_found[j][task_id], connected[j][task_id], found[j][task_id])
+                        txt_batch_preds += ": {} : {}".format(ens_found[j][task_id], found[j][task_id])
                 batch_preds.append(txt_batch_preds)
 
             losses.update(loss.item(), batch_size)

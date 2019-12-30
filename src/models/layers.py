@@ -314,3 +314,6 @@ class AttnDecoderLSTM(nn.Module):
         decoder_out, (ht, ct) = self.decoder(h, (h0, c0))
 
         return decoder_out
+
+# class TemporalAttention(nn.Module):
+#     def __init__(self):
