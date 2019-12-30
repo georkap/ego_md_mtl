@@ -94,7 +94,8 @@ class MFNET_3D_MO_WEIGHTED(nn.Module):
 
         self.attn = nn.Sequential()
         self.attn.add_module('attn', nn.Linear(c5_out * self.t_dim_in//2, self.t_dim_in // 2))
-        self.attn.add_module('soft', nn.Softmax(dim=1))
+        self.attn.add_module('sigmoid', nn.Sigmoid())
+        # self.attn.add_module('soft', nn.Softmax(dim=1))
         self.globalpool = nn.Sequential()
         self.globalpool.add_module('avg', nn.AvgPool3d(kernel_size=(self.t_dim_in // 2, self.s_dim_in // 32, self.s_dim_in // 32),
                                                        stride=(1, 1, 1)))
