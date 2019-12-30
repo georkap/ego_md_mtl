@@ -158,7 +158,6 @@ class MFNET_3D_MO_WEIGHTED(nn.Module):
 
         if not self.training and self.ensemble_eval:
             h_out = [h_out, h_ens]
-            return h_out, coords, heatmaps, probabilities, objects, cat_obj
 
         return h_out, coords, heatmaps, probabilities, objects, cat_obj
 

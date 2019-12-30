@@ -184,9 +184,8 @@ class MFNET_3D_TDN(nn.Module):
         #     cat_obj = [self.__getattr__('objcat_presence_layer_{}'.format(ii))(h) for ii in range(len(self.num_obj_cat))]
         if not self.training and self.ensemble_eval:
             h_out = [h_out, h_ens]
-            return h_out, coords, heatmaps, probabilities, objects, cat_obj
-
-        h_out = [h_out, h_diff_out]
+        else:
+            h_out = [h_out, h_diff_out]
         return h_out, coords, heatmaps, probabilities, objects, cat_obj
 
 
