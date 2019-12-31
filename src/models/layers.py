@@ -315,5 +315,23 @@ class AttnDecoderLSTM(nn.Module):
 
         return decoder_out
 
-# class TemporalAttention(nn.Module):
-#     def __init__(self):
+class TemporalAttention(nn.Module):
+    def __init__(self, num_in_feat, t_dim, num_cls_tasks):
+        super(TemporalAttention, self).__init__()
+        self.num_cls_tasks = num_cls_tasks
+        self.num_in_feat = num_in_feat
+        self.t_dim = t_dim
+        for task_id in range(num_cls_tasks):
+            attention = nn.ModuleList([nn.Linear(num_in_feat, 1) for _ in range(t_dim)])
+            self.add_module('attn_{}'.format(task_id), attention)
+
+    def forward(self, h_ens): # Bx768x8
+        h_ens_out = torch.zeros((h_ens.shape[0], self.t_dim, self.num_cls_tasks), device=h_ens.device)
+        for task_id in range(self.num_cls_tasks):
+            attention = getattr(self, "attn_{}".format(task_id))
+            for ens_id, ens_layer in enumerate(attention):
+                prob = torch.sigmoid(ens_layer(h_ens[:, :, ens_id]))
+                h_ens_out[:, ens_id, task_id] = prob.squeeze(1)
+        return h_ens_out # B x 8 x num_cls_tasks
+
+

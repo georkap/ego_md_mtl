@@ -16,8 +16,11 @@ from src.utils.epic_eval_utils import get_manyhot_classes
 from src.constants import *
 
 def update_per_dataset_metrics(metrics, outputs_for_dat, targets_for_dat, dataset_loss, partial_task_losses,
-                               num_cls_tasks, dataset_batch_size, is_training, multioutput_loss):
-    cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses = partial_task_losses
+                               num_cls_tasks, dataset_batch_size, is_training, multioutput_loss, t_attn):
+    if t_attn:
+        cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses, temporal_task_losses = partial_task_losses
+    else:
+        cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses = partial_task_losses
 
     metrics['losses'].update(dataset_loss.item(), dataset_batch_size)
     for i in range(num_cls_tasks):
@@ -36,6 +39,8 @@ def update_per_dataset_metrics(metrics, outputs_for_dat, targets_for_dat, datase
                     metrics['cls_loss_meters'][i][j].update(cls_losses[i*multioutput_loss + j].item(), dataset_batch_size)
             else:
                 metrics['cls_loss_meters'][i].update(cls_losses[i].item(), dataset_batch_size)
+    if is_training and t_attn:
+        metrics['losses_temporal'].update(sum(temporal_task_losses).item(), dataset_batch_size)
     if is_training:
         for i, gl in enumerate(gaze_coord_losses):
             metrics['losses_gaze'][i].update(gl.item(), dataset_batch_size)
@@ -60,7 +65,7 @@ def init_test_metrics(tasks_per_dataset):
         dataset_metrics[i]['top5_meters'] = top5_meters
     return dataset_metrics
 
-def init_training_metrics(tasks_per_dataset, multioutput_loss):
+def init_training_metrics(tasks_per_dataset, multioutput_loss, t_attn):
     batch_time = AverageMeter()
     full_losses = AverageMeter()
     dataset_metrics = list()
@@ -89,6 +94,9 @@ def init_training_metrics(tasks_per_dataset, multioutput_loss):
         dataset_metrics[i]['losses_obj_cat'] = losses_obj_cat
         dataset_metrics[i]['top1_meters'] = top1_meters
         dataset_metrics[i]['top5_meters'] = top5_meters
+        if t_attn:
+            losses_temporal = AverageMeter()
+            dataset_metrics[i]['losses_temporal'] = losses_temporal
     return batch_time, full_losses, dataset_metrics
 
 

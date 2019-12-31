@@ -19,6 +19,7 @@ from src.models.mfnet_3d_mo_dfb import MFNET_3D_DFB
 from src.models.mfnet_3d_mo_lstm import MFNET_3D_LSTM
 from src.models.mfnet_3d_mo_tdn import MFNET_3D_TDN
 from src.models.mfnet_3d_mo_weighted import MFNET_3D_MO_WEIGHTED
+from src.models.mfnet_3d_mo_t_attn import MFNET_3D_MO_T_ATTN
 from src.utils.argparse_utils import parse_args, parse_tasks_str, parse_tasks_per_dataset
 from src.utils.file_utils import print_and_save, save_mt_checkpoints, init_folders, resume_checkpoint, load_pretrained_weights
 from src.utils.dataset.dataset_loader import MultitaskDatasetLoader
@@ -62,6 +63,8 @@ def main():
             multioutput_loss = 3
     elif args.attn:
         mfnet_3d = MFNET_3D_MO_WEIGHTED
+    elif args.t_attn:
+        mfnet_3d = MFNET_3D_MO_T_ATTN
     elif args.tdn:
         mfnet_3d = MFNET_3D_TDN
         multioutput_loss = 3
@@ -152,13 +155,15 @@ def main():
     for epoch in range(args.max_epochs):
         train(model_ft, optimizer, train_iterator, tasks_per_dataset, epoch, log_file, args.gpus, lr_scheduler,
               moo=args.moo, use_flow=args.flow, one_obj_layer=args.one_object_layer,
-              grad_acc_batches=args.grad_acc_batches, multioutput_loss=multioutput_loss)
+              grad_acc_batches=args.grad_acc_batches, multioutput_loss=multioutput_loss, t_attn=args.t_attn)
         if (epoch+1) % args.eval_freq == 0:
             if args.eval_on_train:
                 test(model_ft, train_iterator, tasks_per_dataset, epoch, "Train", log_file, args.gpus,
-                     use_flow=args.flow, one_obj_layer=args.one_object_layer, multioutput_loss=multioutput_loss)
+                     use_flow=args.flow, one_obj_layer=args.one_object_layer, multioutput_loss=multioutput_loss,
+                     t_attn=args.t_attn)
             new_top1 = test(model_ft, test_iterator, tasks_per_dataset, epoch, "Test", log_file, args.gpus,
-                            use_flow=args.flow, one_obj_layer=args.one_object_layer, multioutput_loss=multioutput_loss)
+                            use_flow=args.flow, one_obj_layer=args.one_object_layer, multioutput_loss=multioutput_loss,
+                            t_attn=args.t_attn)
             top1 = save_mt_checkpoints(model_ft, optimizer, top1, new_top1, args.save_all_weights, output_dir,
                                        model_name, epoch)
             if isinstance(lr_scheduler, ReduceLROnPlateau):

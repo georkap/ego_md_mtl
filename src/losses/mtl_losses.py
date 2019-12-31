@@ -6,7 +6,7 @@ from src.losses.min_norm_solvers import MinNormSolver, gradient_normalizers
 
 
 def get_mtl_losses(targets, masks, task_outputs, task_sizes, one_obj_layer, counts, is_training=False,
-                   multioutput_loss=0):
+                   multioutput_loss=0, t_attn=False):
     outputs, coords, heatmaps, probabilities, objects, obj_cat = task_outputs
     num_cls_outputs, num_g_outputs, num_h_outputs, num_o_outputs, num_c_outputs = task_sizes
     targets_starting_point = num_cls_outputs
@@ -16,7 +16,10 @@ def get_mtl_losses(targets, masks, task_outputs, task_sizes, one_obj_layer, coun
     cls_losses = []
     assert len(cls_targets) == num_cls_outputs
 
-    for output, target in zip(outputs, cls_targets):
+    task_id = 0
+    for task_id in range(num_cls_outputs): # changed from enumerate to index to avoid bug when in t_attn outputs and cls_targets have different sizes
+        output = outputs[task_id]
+        target = cls_targets[task_id]
         if multioutput_loss:
             sum_outputs = torch.zeros_like(output[0])
             for o in output: # dfb 1. z_avg, 2. z_ch, 3. z_max -- lstm-mtl 1.z_lstm, 2. z_mtl (z_avg)
@@ -30,6 +33,23 @@ def get_mtl_losses(targets, masks, task_outputs, task_sizes, one_obj_layer, coun
             cls_losses.append(loss_for_task)
     loss = sum(cls_losses)
     # finished with classification losses for any dataset
+    if t_attn:
+        outputs_ensemble = outputs[task_id+1] # t_dim (list) x num_cls_tasks (list) x [B x cls_tasks] (Tensor)
+        probabilities_ensemble = outputs[task_id+2].transpose(1, 0) # t_dim x B x num_cls_tasks
+        temporal_task_losses = []
+        for t_id in range(len(probabilities_ensemble)):
+            temporal_output = outputs_ensemble[t_id]
+            for attn_task_id in range(num_cls_outputs):
+                temporal_task_output = temporal_output[attn_task_id]
+                temporal_task_prob = probabilities_ensemble[t_id, :, attn_task_id]
+                target = cls_targets[attn_task_id]
+                addon = torch.zeros(len(temporal_task_output), device=temporal_task_prob.device)
+                for i, res in enumerate((temporal_task_output.argmax(1) == target)):
+                    addon[i] += 1. if not res else 0.
+                ttl = F.l1_loss(addon+torch.ones(len(temporal_task_output), device=temporal_task_prob.device),
+                                temporal_task_prob, reduction='sum')
+                temporal_task_losses.append(ttl)
+        loss = loss + sum(temporal_task_losses)
 
     gaze_coord_losses, hand_coord_losses = [], []
     if num_g_outputs > 0:
@@ -70,7 +90,7 @@ def get_mtl_losses(targets, masks, task_outputs, task_sizes, one_obj_layer, coun
     if num_o_outputs > 0 or num_c_outputs > 0:
         masks_starting_point += 1
 
-    partial_losses = cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses
+    partial_losses = cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses, temporal_task_losses
     return loss, partial_losses
 
 def _get_mtl_losses(targets, dataset_ids, outputs, coords, heatmaps, num_outputs, tasks_per_dataset, criterion):

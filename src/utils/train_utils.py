@@ -68,20 +68,8 @@ def init_inputs_batch(data, tasks_per_dataset, use_flow, base_gpu):
     batch_ids_per_dataset = init_batch(tasks_per_dataset, dataset_ids)
     return inputs, targets, masks, dataset_ids, batch_ids_per_dataset
 
-# def update_metrics_per_dataset(dataset_metrics, outputs_per_dataset, targets_per_dataset, loss_per_dataset,
-#                                partial_loss_per_dataset, batch_ids_per_dataset, tasks_per_dataset, is_training, dfb):
-#     # update metrics
-#     for dataset_id in range(len(tasks_per_dataset)):
-#         num_cls_tasks = tasks_per_dataset[dataset_id]['num_cls_tasks']
-#         loss = loss_per_dataset[dataset_id]
-#         partial_losses = partial_loss_per_dataset[dataset_id]
-#         dataset_batch_size = len(batch_ids_per_dataset[dataset_id])
-#         update_per_dataset_metrics(dataset_metrics[dataset_id], outputs_per_dataset[dataset_id],
-#                                    targets_per_dataset[dataset_id], loss, partial_losses, num_cls_tasks,
-#                                    dataset_batch_size, is_training, dfb)
-
 def calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, batch_ids_per_dataset, one_obj_layer,
-                            is_training, base_gpu, dataset_metrics, multioutput_loss=0):
+                            is_training, base_gpu, dataset_metrics, multioutput_loss=0, t_attn=False):
     (outputs, coords, heatmaps, probabilities, objects, obj_cat) = network_output
 
     full_loss = []
@@ -126,9 +114,20 @@ def calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, b
                 tmp_outputs = []
                 for o in outputs:
                     tmp_outputs.append(o[global_task_id + task_id][batch_ids_per_dataset[dataset_id]])
+            elif t_attn:
+                tmp_outputs = outputs[0][global_task_id+task_id][batch_ids_per_dataset[dataset_id]]
             else:
                 tmp_outputs = outputs[global_task_id + task_id][batch_ids_per_dataset[dataset_id]]
             outputs_per_dataset[dataset_id].append(tmp_outputs)
+        if t_attn:
+            h_ens = [] # t_dim (list) x num_cls_tasks (list) x [B x cls_tasks] (Tensor)
+            for t_id in range(len(outputs[1])): # t_dim (list) x num_cls_tasks (list) x [B x cls_tasks] (Tensor)
+                h_ens.append([])
+                for task_id in range(num_cls_tasks):
+                    tmp_outputs = outputs[1][t_id][task_id][batch_ids_per_dataset[dataset_id]]
+                    h_ens[t_id].append(tmp_outputs)
+            outputs_per_dataset[dataset_id].append(h_ens)
+            outputs_per_dataset[dataset_id].append(outputs[2][batch_ids_per_dataset[dataset_id]]) # probabilities
         # get model's outputs for the coord tasks of the current dataset
         coo, hea, pro = None, None, None
         if coords is not None:
@@ -165,7 +164,7 @@ def calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, b
 
         loss, partial_losses = get_mtl_losses(targets_per_dataset[dataset_id], masks_per_dataset[dataset_id],
                                               task_outputs, task_sizes, one_obj_layer, counts, is_training=is_training,
-                                              multioutput_loss=multioutput_loss)
+                                              multioutput_loss=multioutput_loss, t_attn=t_attn)
 
         global_task_id += num_cls_tasks
         global_coord_id += num_coord_tasks
@@ -178,13 +177,13 @@ def calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, b
         dataset_batch_size = len(batch_ids_per_dataset[dataset_id])
         update_per_dataset_metrics(dataset_metrics[dataset_id], outputs_per_dataset[dataset_id],
                                    targets_per_dataset[dataset_id], loss, partial_losses, num_cls_tasks,
-                                   dataset_batch_size, is_training, multioutput_loss)
+                                   dataset_batch_size, is_training, multioutput_loss, t_attn)
 
     return sum(full_loss)
     # return full_loss, partial_loss, outputs_per_dataset, targets_per_dataset
 
 def make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_training,
-                  full_losses=None, dataset_ids=None, full_loss=None, multioutput_loss=0):
+                  full_losses=None, dataset_ids=None, full_loss=None, multioutput_loss=0, t_attn=False):
     num_datasets = len(tasks_per_dataset)
     if is_training:
         if num_datasets > 1:
@@ -219,11 +218,12 @@ def make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_tra
                     else:
                         loss_names = []
                     for j, l_name in enumerate(loss_names):
-                        to_print += ' -({}) {:.4f}[avg:{:.4f}] '.format(l_name, cls_loss_meters[ind][j].val,
-                                                                        cls_loss_meters[ind][j].avg)
+                        to_print += ' -({}) {:.4f}[avg:{:.4f}] '.format(l_name, cls_loss_meters[ind][j].val, cls_loss_meters[ind][j].avg)
                 else:
-                    to_print += 'T{}::loss {:.4f}[avg:{:.4f}], '.format(ind, cls_loss_meters[ind].val,
-                                                                        cls_loss_meters[ind].avg)
+                    to_print += 'T{}::loss {:.4f}[avg:{:.4f}], '.format(ind, cls_loss_meters[ind].val, cls_loss_meters[ind].avg)
+            if t_attn:
+                losses_temporal = dataset_metrics[dataset_id]['losses_temporal']
+                to_print += '[ttl {:.4f}[avg:{:.4f}], '.format(losses_temporal.val, losses_temporal.avg)
             if multioutput_loss:
                 to_print += '\n\t'
             for ind in range(num_h_tasks):
@@ -268,8 +268,8 @@ def make_final_test_print(tasks_per_dataset, dataset_metrics, dataset_type, log_
 
 
 def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoch, log_file, gpus, lr_scheduler=None,
-                   moo=False, use_flow=False, one_obj_layer=False, grad_acc_batches=None, multioutput_loss=0):
-    batch_time, full_losses_metric, dataset_metrics = init_training_metrics(tasks_per_dataset, multioutput_loss)
+                   moo=False, use_flow=False, one_obj_layer=False, grad_acc_batches=None, multioutput_loss=0, t_attn=False):
+    batch_time, full_losses_metric, dataset_metrics = init_training_metrics(tasks_per_dataset, multioutput_loss, t_attn)
 
     optimizer.zero_grad()
     model.train()
@@ -301,7 +301,7 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
         network_output = model(inputs)
         full_loss = calc_losses_per_dataset(
             network_output, targets, masks, tasks_per_dataset, batch_ids_per_dataset, one_obj_layer, is_training,
-            gpus[0], dataset_metrics, multioutput_loss)
+            gpus[0], dataset_metrics, multioutput_loss, t_attn)
 
         # implement grad accumulation
         if grad_acc_batches is not None:
@@ -318,7 +318,7 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
                     cur_epoch, real_batch_idx, len(train_iterator)//num_aggregated_batches, batch_time.val,
                     lr_scheduler.get_lr()[0])
                 make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_training, full_losses_metric,
-                              dataset_ids, grad_acc_loss, multioutput_loss)
+                              dataset_ids, grad_acc_loss, multioutput_loss, t_attn)
                 num_aggregated_batches = 0
         else:
             full_loss.backward()
@@ -329,12 +329,12 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
             to_print = '[Epoch:{}, Batch {}/{} in {:.3f} s, LR {:.6f}]'.format(
                 cur_epoch, batch_idx, len(train_iterator), batch_time.val, lr_scheduler.get_lr()[0])
             make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_training, full_losses_metric,
-                          dataset_ids, full_loss, multioutput_loss)
+                          dataset_ids, full_loss, multioutput_loss, t_attn)
 
     print_and_save("Epoch train time: {}".format(batch_time.sum), log_file)
 
 def test_mfnet_mo(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_type, log_file, gpus, use_flow=False,
-                  one_obj_layer=False, multioutput_loss=0):
+                  one_obj_layer=False, multioutput_loss=0, t_attn=False):
     is_training = False
     dataset_metrics = init_test_metrics(tasks_per_dataset)
 
@@ -347,11 +347,11 @@ def test_mfnet_mo(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_ty
 
             network_output = model(inputs)
             _ = calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, batch_ids_per_dataset,
-                                        one_obj_layer, is_training, gpus[0], dataset_metrics, multioutput_loss)
+                                        one_obj_layer, is_training, gpus[0], dataset_metrics, multioutput_loss, t_attn)
 
             # print results
             to_print = '[Epoch:{}, Batch {}/{}]'.format(cur_epoch, batch_idx, len(test_iterator))
-            make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_training, multioutput_loss)
+            make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_training, multioutput_loss, t_attn)
 
         make_final_test_print(tasks_per_dataset, dataset_metrics, dataset_type, log_file)
 
