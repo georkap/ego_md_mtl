@@ -102,7 +102,8 @@ class MFNET_3D_MO_T_ATTN(nn.Module):
         if dropout:
             self.globalpool.add_module('dropout', nn.Dropout(p=dropout))
 
-        self.classifier_list = MultitaskClassifiers(c5_out, num_classes)
+        # self.classifier_list = MultitaskClassifiers(c5_out, num_classes)
+        self.classifier_list = nn.ModuleList([nn.Linear(c5_out, num_cls) for num_cls in self.num_classes if num_cls > 0])
 
         # if self.num_objects:
             # for ii, no in enumerate(self.num_objects): # if there are more than one object presence layers, e.g. one per dataset
@@ -135,11 +136,24 @@ class MFNET_3D_MO_T_ATTN(nn.Module):
         h_ens = h_ens.view(h_ens.shape[0], h_ens.shape[1], -1)
         h_probs = self.temporal_attention(h_ens)  # B x t_dim x num_cls_tasks
         with torch.no_grad():
-            h_ens = [self.classifier_list(h_ens[:, :, ii]) for ii in range(h_ens.shape[2])] # t_dim (list) x num_cls_tasks (list) x [B x cls_tasks] (Tensor)
+            h_ens_out = []
+            for ii in range(h_ens.shape[2]):
+                h_ens_task = []
+                for cls_task, cl in enumerate(self.classifier_list):
+                    h_ens_task.append(cl(h_ens[:, :, ii]))
+                h_ens_out.append(h_ens_task)
+            h_ens = h_ens_out
+            # h_ens = [self.classifier_list(h_ens[:, :, ii]) for ii in range(h_ens.shape[2])] # t_dim (list) x num_cls_tasks (list) x [B x cls_tasks] (Tensor)
 
-        h = self.globalpool(h)
-        h = h.view(h.shape[0], -1)
-        h_out = self.classifier_list(h)
+        h_out = []
+        for cls_task, cl in enumerate(self.classifier_list):
+            h_temp = self.globalpool(h * h_probs[:, :, cls_task].unsqueeze(-1).unsqueeze(-1).unsqueeze(1))
+            h_temp = h_temp.view(h_temp.shape[0], -1)
+            h_out.append(cl(h_temp))
+
+        # h = self.globalpool(h)
+        # h = h.view(h.shape[0], -1)
+        # h_out = self.classifier_list(h)
 
         objects = None
         # if self.num_objects:
