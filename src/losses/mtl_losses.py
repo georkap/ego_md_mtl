@@ -47,7 +47,7 @@ def get_mtl_losses(targets, masks, task_outputs, task_sizes, one_obj_layer, coun
                 for i, res in enumerate((temporal_task_output.argmax(1) == target)):
                     addon[i] += 1. if not res else 0.
                 ttl = F.l1_loss(addon+torch.ones(len(temporal_task_output), device=temporal_task_prob.device),
-                                temporal_task_prob, reduction='sum')
+                                temporal_task_prob, reduction='mean')
                 temporal_task_losses.append(ttl)
         loss = loss + sum(temporal_task_losses)
 
