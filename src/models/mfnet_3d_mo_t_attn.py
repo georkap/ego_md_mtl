@@ -147,7 +147,11 @@ class MFNET_3D_MO_T_ATTN(nn.Module):
 
         h_out = []
         for cls_task, cl in enumerate(self.classifier_list):
-            h_temp = self.globalpool(h * h_probs[:, :, cls_task].unsqueeze(-1).unsqueeze(-1).unsqueeze(1))
+            if self.training:
+                h_temp = self.globalpool(h)
+            else:
+                h_temp = self.globalpool(h * h_probs[:, :, cls_task].unsqueeze(-1).unsqueeze(-1).unsqueeze(1))
+
             h_temp = h_temp.view(h_temp.shape[0], -1)
             h_out.append(cl(h_temp))
 
