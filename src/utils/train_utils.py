@@ -411,10 +411,17 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
                                 ens_found[j][task_id] += '1'
                             else:
                                 ens_found[j][task_id] += '0'
-                outputs = ensemble_outputs
+                if t_attn:
+                    ensemble_outputs.append(ens_outputs)
+                    ensemble_outputs.append(_probs)
+                    outputs = ensemble_outputs
+                else:
+                    outputs = ensemble_outputs
             else:
                 if t_attn:
                     full_outputs, ens_outputs, _probs = outputs
+                    full_outputs.append(ens_outputs)
+                    full_outputs.append(_probs)
                     outputs = full_outputs
 
             if multioutput_loss:
