@@ -35,6 +35,7 @@ from src.models.mfnet_3d_mo_dfb import MFNET_3D_DFB
 from src.models.mfnet_3d_mo_lstm import MFNET_3D_LSTM
 from src.models.mfnet_3d_mo_tdn import MFNET_3D_TDN
 from src.models.mfnet_3d_mo_weighted import MFNET_3D_MO_WEIGHTED
+from src.models.mfnet_3d_mo_t_attn import MFNET_3D_MO_T_ATTN
 from src.utils.argparse_utils import parse_args, make_log_file_name, parse_tasks_str, parse_tasks_per_dataset, compare_tasks_per_dataset
 from src.utils.file_utils import print_and_save
 from src.utils.dataset.dataset_loader import MultitaskDatasetLoader
@@ -85,8 +86,10 @@ def main():
         kwargs['mtl'] = args.mtl
         if args.mtl:
             multioutput_loss = 3
-    elif args.attn:
+    elif args.attn: # weighted attention model
         mfnet_3d = MFNET_3D_MO_WEIGHTED
+    elif args.t_attn: # temporal attention model
+        mfnet_3d = MFNET_3D_MO_T_ATTN
     elif args.tdn:
         mfnet_3d = MFNET_3D_TDN
         multioutput_loss = 3
@@ -97,7 +100,7 @@ def main():
     kwargs["num_objects"] = num_objects
     kwargs["num_obj_cat"] = num_obj_cat
     kwargs["one_object_layer"] = args.one_object_layer
-    kwargs["ensemble_eval"] = True if args.eval_ensemble is not None else False # for the network param, we dont care what the ensemble data will be used for
+    kwargs["ensemble_eval"] = args.eval_ensemble
     if args.long:
         kwargs["k_sec"] = {2: 3, 3: 4, 4: 11, 5: 3}
     model_ft = mfnet_3d(num_classes, **kwargs)
@@ -153,7 +156,7 @@ def main():
         top1, outputs = validate(model_ft, val_iter, objectives, checkpoint['epoch'], args.dataset, log_file,
                                  use_flow=args.flow, one_obj_layer=args.one_object_layer,
                                  multioutput_loss=multioutput_loss, eval_branch=args.eval_branch,
-                                 eval_ensemble=args.eval_ensemble)
+                                 eval_ensemble=args.eval_ensemble, t_attn=args.t_attn)
 
         if args.eval_gaze:
             return

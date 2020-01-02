@@ -364,7 +364,7 @@ def test_mfnet_mo(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_ty
     return task_top1s
 
 def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_file, use_flow=False, one_obj_layer=False,
-                      multioutput_loss=0, eval_branch=None, eval_ensemble=None):
+                      multioutput_loss=0, eval_branch=None, eval_ensemble=False, t_attn=False):
     num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks, num_c_tasks = task_sizes
     losses = AverageMeter()
     top1_meters = [AverageMeter() for _ in range(num_cls_tasks)]
@@ -385,9 +385,12 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
             network_output = model(inputs)
             outputs, coords, heatmaps, probabilities, objects, obj_cat = network_output
 
-            if eval_ensemble is not None: # only compatible for multioutput_loss ==False for now
-                assert not multioutput_loss
-                full_outputs, ens_outputs = outputs
+            if eval_ensemble or t_attn:
+                assert not multioutput_loss # only compatible for multioutput_loss ==False for now
+                if t_attn:
+                    full_outputs, ens_outputs, _probs = outputs
+                else: # normal eval_ensemble
+                    full_outputs, ens_outputs = outputs
                 found = [[0 for __ in range(num_cls_tasks)] for _ in range(batch_size)]
                 for task_id, task_out in enumerate(full_outputs):
                     for j, unbatched_outs in enumerate(task_out):
@@ -408,15 +411,6 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
                                 ens_found[j][task_id] += '1'
                             else:
                                 ens_found[j][task_id] += '0'
-                                # ens_found[j][task_id] += 1
-                                # if connected[j][task_id] == 'n': # if 'n'ot connected set 'c'onnected to True
-                                #     connected[j][task_id] = 'c'
-                                # elif connected[j][task_id] == 'd': # 1 connection 'd'ropped and found new correct ensemble
-                                #     connected[j][task_id] = 'r' # 'r'econnected
-                            # else: # if an ensemble part is not correct
-                            #     if connected[j][task_id] == 'c': # check if connected and set connection dropped
-                            #         connected[j][task_id] = 'd'
-
                 outputs = ensemble_outputs
 
             if multioutput_loss:
