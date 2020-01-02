@@ -172,9 +172,10 @@ if __name__ == "__main__":
     data = data.cuda()
     net.eval()
     # loss = torch.tensor([10]).cuda()
-    t0 = time.time()
-    # for i in range(10):
     output = net(data)
+    t0 = time.time()
+    for i in range(10):
+        output = net(data)
     t1 = time.time()
     print('forward time:', t1-t0)
     # h, htail = net.forward_shared_block(data)

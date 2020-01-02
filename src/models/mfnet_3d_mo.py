@@ -197,18 +197,19 @@ if __name__ == "__main__":
     import torch, time
     # ---------
     kwargs = {'num_coords': 0, 'num_objects': None, 'num_obj_cat': None, 'one_object_layer': True,
-              'ensemble_eval': True}
+              'ensemble_eval': False}
     net = MFNET_3D_MO(num_classes=[106, 19, 53], dropout=0.5, **kwargs)
     data = torch.randn(1, 3, 16, 224, 224, requires_grad=True)
     net.cuda()
     data = data.cuda()
     net.eval()
     # loss = torch.tensor([10]).cuda()
-    t0 = time.time()
-    # for i in range(10):
     output = net(data)
+    t0 = time.time()
+    for i in range(10):
+        output = net(data)
     t1 = time.time()
-    print('forward time:', t1-t0)
+    print('forward time:', t1 - t0)
     # h, htail = net.forward_shared_block(data)
     # coords, heatmaps, probabilities = net.forward_coord_layers(htail)
     # output = net.forward_cls_layers(h)
