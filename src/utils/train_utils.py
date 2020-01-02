@@ -432,7 +432,7 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
 
             per_task_outputs = (outputs, coords, heatmaps, probabilities, objects, obj_cat)
             loss, partial_losses = get_mtl_losses(targets, masks, per_task_outputs, task_sizes, one_obj_layer, counts,
-                                                  is_training=False, multioutput_loss=multioutput_loss)
+                                                  is_training=False, multioutput_loss=multioutput_loss, t_attn=t_attn)
 
             # save predictions for evaluation afterwards
             batch_preds = []
