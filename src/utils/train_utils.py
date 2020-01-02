@@ -385,7 +385,7 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
             network_output = model(inputs)
             outputs, coords, heatmaps, probabilities, objects, obj_cat = network_output
 
-            if eval_ensemble or t_attn:
+            if eval_ensemble:
                 assert not multioutput_loss # only compatible for multioutput_loss ==False for now
                 if t_attn:
                     full_outputs, ens_outputs, _probs = outputs
