@@ -90,7 +90,10 @@ def get_mtl_losses(targets, masks, task_outputs, task_sizes, one_obj_layer, coun
     if num_o_outputs > 0 or num_c_outputs > 0:
         masks_starting_point += 1
 
-    partial_losses = cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses, temporal_task_losses
+    if t_attn:
+        partial_losses = cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses, temporal_task_losses
+    else:
+        partial_losses = cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses
     return loss, partial_losses
 
 def _get_mtl_losses(targets, dataset_ids, outputs, coords, heatmaps, num_outputs, tasks_per_dataset, criterion):
