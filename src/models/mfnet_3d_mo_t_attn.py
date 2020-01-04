@@ -186,7 +186,7 @@ if __name__ == "__main__":
     kwargs = {'num_coords': 0, 'num_objects': None, 'num_obj_cat': None, 'one_object_layer': True,
               'ensemble_eval': False}
     net = MFNET_3D_MO_T_ATTN(num_classes=[106, 19, 53], dropout=0.5, **kwargs)
-    data = torch.randn(1, 3, 16, 224, 224, requires_grad=True)
+    data = torch.randn(2, 3, 16, 224, 224, requires_grad=True)
     net.cuda()
     data = data.cuda()
     net.eval()

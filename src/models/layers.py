@@ -349,5 +349,5 @@ class TemporalAttentionCon(nn.Module):
         for task_id in range(self.num_cls_tasks):
             attention = getattr(self, "attn_{}".format(task_id))
             prob = torch.sigmoid(attention(h_ens))
-            h_ens_out[:, :, task_id] = prob.unsqueeze(1)
+            h_ens_out[:, :, task_id] = prob
         return h_ens_out # B x 8 x num_cls_tasks
