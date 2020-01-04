@@ -334,4 +334,20 @@ class TemporalAttention(nn.Module):
                 h_ens_out[:, ens_id, task_id] = prob.squeeze(1)
         return h_ens_out # B x 8 x num_cls_tasks
 
+class TemporalAttentionCon(nn.Module):
+    def __init__(self, num_in_feat, t_dim, num_cls_tasks):
+        super(TemporalAttentionCon, self).__init__()
+        self.num_cls_tasks = num_cls_tasks
+        self.num_in_feat = num_in_feat
+        self.t_dim = t_dim
+        for task_id in range(num_cls_tasks):
+            attention = nn.Linear(num_in_feat * t_dim, t_dim)
+            self.add_module('attn_{}'.format(task_id), attention)
 
+    def forward(self, h_ens): # Bx768x8
+        h_ens_out = torch.zeros((h_ens.shape[0], self.t_dim, self.num_cls_tasks), device=h_ens.device)
+        for task_id in range(self.num_cls_tasks):
+            attention = getattr(self, "attn_{}".format(task_id))
+            prob = torch.sigmoid(attention(h_ens))
+            h_ens_out[:, :, task_id] = prob.unsqueeze(1)
+        return h_ens_out # B x 8 x num_cls_tasks

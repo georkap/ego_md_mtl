@@ -14,7 +14,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 
-from src.models.layers import CoordRegressionLayer, MultitaskClassifiers, ObjectPresenceLayer, MF_UNIT, get_norm_layers, TemporalAttention
+from src.models.layers import CoordRegressionLayer, MultitaskClassifiers, ObjectPresenceLayer, MF_UNIT, get_norm_layers, TemporalAttentionCon
 from src.utils.initializer import xavier
 from torch.functional import F
 
@@ -42,6 +42,7 @@ class MFNET_3D_MO_T_ATTN(nn.Module):
         c3_out = 2 * c2_out
         c4_out = 2 * c3_out
         c5_out = 2 * c4_out
+        self.c5_out = c5_out
 
         conv1normlayer, tailnorm = get_norm_layers(self.norm, c1_out, c5_out)
 
@@ -93,7 +94,8 @@ class MFNET_3D_MO_T_ATTN(nn.Module):
         # final
         self.tail = nn.Sequential(OrderedDict([tailnorm, ('relu', nn.ReLU(inplace=True))]))
 
-        self.temporal_attention = TemporalAttention(c5_out, self.t_dim_in//2, len(num_classes))
+        # self.temporal_attention = TemporalAttention(c5_out, self.t_dim_in//2, len(num_classes))
+        self.temporal_attention = TemporalAttentionCon(c5_out, self.t_dim_in//2, len(num_classes))
 
         self.globalpool = nn.Sequential()
         self.globalpool.add_module('avg', nn.AvgPool3d(kernel_size=(self.t_dim_in // 2, self.s_dim_in // 32,
@@ -133,16 +135,24 @@ class MFNET_3D_MO_T_ATTN(nn.Module):
         h_ens = F.avg_pool3d(h, (1, self.s_dim_in//32, self.s_dim_in//32), (1, 1, 1))
         if hasattr(self, 'dropout'):
             h_ens = self.dropout(h_ens)
-        h_ens = h_ens.view(h_ens.shape[0], h_ens.shape[1], -1)
-        h_probs = self.temporal_attention(h_ens)  # B x t_dim x num_cls_tasks
+        # first temporal attention
+        # h_ens = h_ens.view(h_ens.shape[0], h_ens.shape[1], -1)
+        # h_probs = self.temporal_attention(h_ens)  # B x t_dim x num_cls_tasks
+        # temporal attention connected
+        h_ens = h_ens.view(h_ens.shape[0], -1)
+        h_probs = self.temporal_attention(h_ens) # B x t_dim x num_cls_tasks
+        h_ens = h_ens.view(h_ens.shape[0], self.c5_out, -1)
         with torch.no_grad():
+            # TemporalAttentionCon and # TemporalAttention
             h_ens_out = []
-            for ii in range(h_ens.shape[2]):
+            for ii in range(self.t_dim_in//2):
                 h_ens_task = []
                 for cls_task, cl in enumerate(self.classifier_list):
                     h_ens_task.append(cl(h_ens[:, :, ii]))
                 h_ens_out.append(h_ens_task)
             h_ens = h_ens_out
+            #
+            # old temporal attention
             # h_ens = [self.classifier_list(h_ens[:, :, ii]) for ii in range(h_ens.shape[2])] # t_dim (list) x num_cls_tasks (list) x [B x cls_tasks] (Tensor)
 
         h_out = []
