@@ -11,7 +11,7 @@ import os, re, argparse, sys
 def make_base_parser(val):
     parser = argparse.ArgumentParser(description='Hand activity recognition')
 
-    parser.add_argument('dataset', type=str, nargs='*', choices=['epick', 'egtea', 'somv1'])
+    parser.add_argument('dataset', type=str, nargs='*', choices=['epick', 'egtea', 'somv1', 'adl'])
     # Load the necessary paths    
     if not val:
         parser.add_argument('--train_lists', type=str, nargs='*')
@@ -208,14 +208,15 @@ def parse_tasks_str(task_str, dataset_names):
         # get per class numbers (if there are any) but skip the first one because the patter always starts with a letter
         classes = re.split(r'[A-Z]', dataset_tasks)[1:]
         assert len(tasks) == len(classes)
-        num_cls_tasks = 0
-        num_g_tasks = 0
-        num_h_tasks = 0
-        num_o_tasks = 0
-        num_c_tasks = 0
+        num_cls_tasks = 0 # classification tasks
+        num_g_tasks = 0 # gaze prediction tasks
+        num_h_tasks = 0 # hand detection tasks
+        num_o_tasks = 0 # object vector prediction tasks
+        num_c_tasks = 0 # object category prediction tasks
         max_target_size = 0
         for t, cls in zip(tasks, classes):
             num_classes[t] = int(cls) if cls is not '' else None
+            # current classification tasks A, V, N, L ->update as necessary
             if t not in ['G', 'H', 'O', 'C']: # expand with other non classification tasks as necessary
                 num_cls_tasks += 1
                 max_target_size += 1
@@ -267,6 +268,10 @@ def parse_tasks_per_dataset(tasks_per_dataset):
                 num_cls_objectives += 1
             elif key == 'N':
                 objectives_text += " nouns {}, ".format(value)
+                num_classes.append(value)
+                num_cls_objectives += 1
+            elif key == 'L':
+                objectives_text += " locations {}, ".format(value)
                 num_classes.append(value)
                 num_cls_objectives += 1
             elif key == 'G':

@@ -19,11 +19,11 @@ class EPICDataLine(DataLine):
         return int(self.data[1])
 
     @property
-    def label_verb(self):
+    def label_verb(self, **kwargs):
         return int(self.data[2])
 
     @property
-    def label_noun(self):
+    def label_noun(self, **kwargs):
         return int(self.data[3])
 
     @property
@@ -35,7 +35,7 @@ class EPICDataLine(DataLine):
         return int(self.data[5] if len(self.data) > 5 else -1)
 
     @property
-    def label_action(self):
+    def label_action(self, **kwargs):
         return int(self.data[6] if len(self.data) > 6 else -1)
 
     def parse(self, dataset_info):
@@ -79,19 +79,19 @@ class GTEADataLine(DataLine):
         return os.path.normpath(self.data[0]).split(os.sep)[-1]
 
     @property
-    def label_action(self): # to zero based labels
+    def label_action(self, **kwargs): # to zero based labels
         return int(self.data[1]) - 1
 
     @property
-    def label_verb(self):
+    def label_verb(self, **kwargs):
         return int(self.data[2]) - 1
 
     @property
-    def label_noun(self):
+    def label_noun(self, **kwargs):
         return int(self.data[3]) - 1
 
     @property
-    def extra_nouns(self):
+    def extra_nouns(self, **kwargs):
         extra_nouns = list()
         if self.data_len > 4:
             for noun in self.data[4:]:
@@ -145,3 +145,65 @@ class SOMETHINGV1DataLine(DataLine):
             hand_track_path = os.path.join(self.data_path.replace("clips_frames", dataset_info.hand_list_prefix), '.pkl')
 
         return (self.data_path, self.uid), (start_frame, frame_count), (use_hands, use_gaze, use_objects, use_categories), (hand_track_path, gaze_track_path, obj_track_path)
+
+
+class ADLDataLine(DataLine):
+    def __init__(self, row):
+        super(ADLDataLine, self).__init__(row)
+
+    @property
+    def num_frames(self):
+        return int(self.data[1])
+
+    @property
+    def uid(self):
+        return int(self.data[2])
+
+    @property
+    def start_frame(self):
+        return int(self.data[3])
+
+    @property
+    def label_action(self, **kwargs):
+        return int(self.data[4])
+
+    @property
+    def label_location(self, **kwargs):
+        locations = self.data[5].strip('-').split('-')
+        loc_ids, loc_frames = [], []
+        for l in locations:
+            loc, fr = l.split(':')
+            loc_ids.append(int(loc))
+            loc_frames.append(int(loc_frames))
+
+        if len(loc_ids) == 1:
+            return loc_ids[0]
+        elif len(loc_ids) == 0:
+            return 0 # undefined location
+        else:
+            sampled_idxs = kwargs.get('sampled_idxs')
+            max_num_before_change = -1
+            loc_id = -1
+            for i, frames in enumerate(loc_frames):
+                num_before_change = 0
+                for idx in sampled_idxs:
+                    if idx <= frames:
+                        num_before_change += 1
+                if num_before_change > max_num_before_change:
+                    max_num_before_change = num_before_change
+                    loc_id = i
+        return loc_ids[loc_id]
+
+    def parse(self, dataset_info):
+        uid = self.uid
+        frame_count = self.num_frames
+        start_frame = self.start_frame if self.start_frame != -1 else 0
+        use_hands, use_gaze, use_objects, use_categories = False, False, False, False
+        hand_track_path, gaze_track_path, obj_track_path = None, None, None
+        # if 'H' in dataset_info.td:
+        #     use_hands = True
+        #     hand_track_path = os.path.join(self.data_path.replace("clips_frames", dataset_info.hand_list_prefix), '.pkl')
+        #     path_d, path_ds, a, b, c, pid, vid_id = self.data_path.split(os.path.sep) # os.path.sep
+        #     hand_track_path = os.path.join(path_d, path_ds, dataset_info.hand_list_prefix, pid, vid_id,
+        #                                    "{}_{}_{}.pkl".format(start_frame, self.label_verb, self.label_noun))
+        return (self.data_path, uid), (start_frame, frame_count), (use_hands, use_gaze, use_objects, use_categories), (hand_track_path, gaze_track_path, obj_track_path)

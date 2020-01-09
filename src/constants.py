@@ -17,3 +17,7 @@ GTEA_CLS_TASKS = ['A', 'V', 'N']
 SOMETHINGV1_CLASSES = [174]
 LABELS_SOMV1 = {'label_action': SOMETHINGV1_CLASSES[0]}
 SOMV1_CLS_TASKS = ['A']
+
+ADL_CLASSES = [31, 8]
+LABELS_ADL = {'label_action': ADL_CLASSES[0], 'label_location': ADL_CLASSES[1]}
+ADL_CLS_TASKS = ['A', 'L']

@@ -16,7 +16,7 @@ from src.utils.dataset.DatasetInfo import DatasetInfo
 from src.utils.dataset.file_loading_utils import load_rgb_clip, load_flow_clip, load_hand_tracks, load_gaze_track, \
     load_pickle, load_images2
 from src.utils.dataset.dataset_loader_transforms import get_scale_and_shift
-from src.utils.dataset.dataset_lines import EPICDataLine, GTEADataLine, SOMETHINGV1DataLine
+from src.utils.dataset.dataset_lines import EPICDataLine, GTEADataLine, SOMETHINGV1DataLine, ADLDataLine
 from src.utils.dataset.visualization_utils import visualize_item
 from src.constants import *
 
@@ -97,6 +97,12 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
                 cls_tasks = SOMV1_CLS_TASKS
                 max_num_classes = LABELS_SOMV1
                 sub_with_flow = 'clips_frames\\'
+            elif dataset_name == 'adl':
+                data_line = ADLDataLine
+                img_tmpl = '{:06d}.jpg'
+                cls_tasks = ADL_CLS_TASKS
+                max_num_classes = LABELS_ADL
+                sub_with_flow = 'ADL_frames\\'
             else:
                 # undeveloped dataset yet e.g. something something v2 or whatever
                 sys.exit("Unknown dataset")
@@ -129,6 +135,8 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
             dataset_name = 'egtea'
         elif isinstance(data_line, SOMETHINGV1DataLine):
             dataset_name = 'somv1'
+        elif isinstance(data_line, ADLDataLine):
+            dataset_name = 'adl'
         else:
             # unknown type
             sys.exit("Wrong data_line in dataloader.__getitem__. Exit code -2")
@@ -287,7 +295,8 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
         mappings = self.dataset_infos[dataset_name].mappings
         for i, cls_task in enumerate(all_cls_tasks):
             if cls_task in tasks_for_dataset:
-                label_num = getattr(data_line, all_cls_tasks_names[i])
+                kwargs = {'sampled_idxs': sampled_idxs} if cls_task == 'L' else None
+                label_num = getattr(data_line, all_cls_tasks_names[i], **kwargs)
                 label_num = mappings[i][label_num] if mappings[i] is not None else label_num
                 labels.append(label_num)
 
