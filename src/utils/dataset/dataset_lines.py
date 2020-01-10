@@ -173,7 +173,7 @@ class ADLDataLine(DataLine):
         for l in locations:
             loc, fr = l.split(':')
             loc_ids.append(int(loc))
-            loc_frames.append(int(loc_frames))
+            loc_frames.append(int(fr))
 
         if len(loc_ids) == 1:
             return loc_ids[0]
