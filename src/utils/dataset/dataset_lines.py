@@ -19,11 +19,11 @@ class EPICDataLine(DataLine):
         return int(self.data[1])
 
     @property
-    def label_verb(self, **kwargs):
+    def label_verb(self):
         return int(self.data[2])
 
     @property
-    def label_noun(self, **kwargs):
+    def label_noun(self):
         return int(self.data[3])
 
     @property
@@ -35,7 +35,7 @@ class EPICDataLine(DataLine):
         return int(self.data[5] if len(self.data) > 5 else -1)
 
     @property
-    def label_action(self, **kwargs):
+    def label_action(self):
         return int(self.data[6] if len(self.data) > 6 else -1)
 
     def parse(self, dataset_info):
@@ -79,19 +79,19 @@ class GTEADataLine(DataLine):
         return os.path.normpath(self.data[0]).split(os.sep)[-1]
 
     @property
-    def label_action(self, **kwargs): # to zero based labels
+    def label_action(self): # to zero based labels
         return int(self.data[1]) - 1
 
     @property
-    def label_verb(self, **kwargs):
+    def label_verb(self):
         return int(self.data[2]) - 1
 
     @property
-    def label_noun(self, **kwargs):
+    def label_noun(self):
         return int(self.data[3]) - 1
 
     @property
-    def extra_nouns(self, **kwargs):
+    def extra_nouns(self):
         extra_nouns = list()
         if self.data_len > 4:
             for noun in self.data[4:]:
@@ -164,11 +164,10 @@ class ADLDataLine(DataLine):
         return int(self.data[3])
 
     @property
-    def label_action(self, **kwargs):
+    def label_action(self):
         return int(self.data[4])
 
-    @property
-    def label_location(self, **kwargs):
+    def label_location(self, sampled_idxs):
         locations = self.data[5].strip('-').split('-')
         loc_ids, loc_frames = [], []
         for l in locations:
@@ -181,7 +180,6 @@ class ADLDataLine(DataLine):
         elif len(loc_ids) == 0:
             return 0 # undefined location
         else:
-            sampled_idxs = kwargs.get('sampled_idxs')
             max_num_before_change = -1
             loc_id = -1
             for i, frames in enumerate(loc_frames):

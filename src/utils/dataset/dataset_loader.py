@@ -296,8 +296,7 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
         for i, cls_task in enumerate(all_cls_tasks):
             if cls_task in tasks_for_dataset:
                 if cls_task == 'L':
-                    kwargs = {'sampled_idxs': sampled_idxs}
-                    label_num = getattr(data_line, all_cls_tasks_names[i], **kwargs)
+                    label_num = data_line.label_location(sampled_idxs)
                 else:
                     label_num = getattr(data_line, all_cls_tasks_names[i])
                 label_num = mappings[i][label_num] if mappings[i] is not None else label_num
