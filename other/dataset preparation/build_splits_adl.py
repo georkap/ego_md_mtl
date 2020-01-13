@@ -5,12 +5,14 @@ mtl advanced
 
 import os, argparse
 
+valid_actions = [1,2,3,4,5,6,9,10,11,12,13,14,15,17,20,22,23,24]
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('annots_dir_path')
     parser.add_argument('locations_dir_path')
     parser.add_argument('out_file_name_with_path', type=str)
+    parser.add_argument('--only_valid_actions', default=False, action='store_true')
     return parser.parse_args()
 
 def search_for_locations(locations_lines, start_a, end_a):
@@ -40,6 +42,7 @@ def search_for_locations(locations_lines, start_a, end_a):
 args = parse_args()
 annots_dir = args.annots_dir_path
 locations_dir = args.locations_dir_path
+only_valid_actions = args.only_valid_actions
 outfile_path = args.out_file_name_with_path
 outfile_dir = os.path.dirname(outfile_path)
 if not os.path.exists(outfile_dir):
@@ -66,6 +69,9 @@ for i, annot_file in enumerate(annot_files):
         start_frame = data[0]
         end_frame = data[1]
         action = int(data[2]) - 1 # turn action into 0-based
+        if only_valid_actions:
+            if action + 1 not in valid_actions:
+                continue
         if action < 0: # to avoid a weirdly labeled action out of the action set
             continue
         locations = search_for_locations(loc_lines, start_frame, end_frame)
