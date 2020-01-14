@@ -101,7 +101,8 @@ def parse_args_eval(parser):
     # Parameters for evaluation during testing
     parser.add_argument('--mfnet_eval', type=int, default=1)
     # sampler and window apply to evaluation during training as well
-    parser.add_argument('--eval_sampler', type=str, default='random', choices=['middle', 'random', 'sequential', 'doublefull'])
+    parser.add_argument('--eval_sampler', type=str, default='random',
+                        choices=['middle', 'random', 'sequential', 'full', 'doublefull', 'uniform'])
     parser.add_argument('--eval_crop', type=str, default='random', choices=['center', 'random'])
     parser.add_argument('--eval_ensemble', default=False, action='store_true')
     parser.add_argument('--eval_gaze', default=False, action='store_true')
