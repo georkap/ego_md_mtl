@@ -7,7 +7,7 @@ import sys
 
 class UniformSampling(object):
     def sampling(self, range_max, v_id=None, pred_failed=False, start_frame=0):
-        return np.linspace(start_frame, start_frame + range_max, num=16, dtype=np.int)
+        return list(np.linspace(start_frame, start_frame + range_max, num=16, endpoint=False, dtype=np.int))
 
 class DoubleFullSampling(object):
     """samples every frame twice i.e. idxs = [0, 0, 1, 1, 2, 2, ... ]"""
