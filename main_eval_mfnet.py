@@ -41,7 +41,7 @@ from src.utils.file_utils import print_and_save
 from src.utils.dataset.dataset_loader import MultitaskDatasetLoader
 from src.utils.dataset.dataset_loader_transforms import Resize, RandomCrop, ToTensorVid, Normalize, CenterCrop
 from src.utils.calc_utils import eval_final_print_mt
-from src.utils.video_sampler import RandomSampling, MiddleSampling, DoubleFullSampling
+from src.utils.video_sampler import prepare_sampler
 from src.utils.train_utils import validate_mfnet_mo, validate_mfnet_mo_gaze
 from src.constants import *
 
@@ -59,11 +59,8 @@ def main():
         tasks_per_dataset = eval_tasks_per_dataset
         args.dataset = [args.eval_dataset]
 
-    # objectives_text, num_objectives, num_classes, num_coords, num_objects = parse_tasks_per_dataset(tasks_per_dataset)
     objectives_text, objectives, task_sizes = parse_tasks_per_dataset(tasks_per_dataset)
-    num_cls_objectives, num_g_objectives, num_h_objectives, num_o_objectives, num_c_objectives = objectives
     num_classes, num_coords, num_objects, num_obj_cat = task_sizes
-
 
     output_dir = os.path.dirname(args.ckpt_path)
     log_file = make_log_file_name(output_dir, args)
@@ -125,18 +122,12 @@ def main():
     overall_mean_cls_acc = [0]*objectives[0]
     for i in range(args.mfnet_eval):
         crop_type = CenterCrop((224, 224)) if args.eval_crop == 'center' else RandomCrop((224, 224))
-        if args.eval_sampler == 'middle':
-            val_sampler = MiddleSampling(num=args.clip_length, window=args.eval_window)
-        elif args.eval_sampler == 'doublefull':
-            val_sampler = DoubleFullSampling()
-        else:
-            val_sampler = RandomSampling(num=args.clip_length, interval=args.frame_interval, speed=[1.0, 1.0], seed=i)
-
-        val_transforms = transforms.Compose([Resize((256, 256), False), crop_type, ToTensorVid(),
-                                             Normalize(mean=mean_3d, std=std_3d)])
-        val_transforms_flow = transforms.Compose(
-            [Resize((256, 256), False), CenterCrop((224, 224)), ToTensorVid(dim=2),
-             Normalize(mean=mean_1d, std=std_1d)])
+        val_sampler = prepare_sampler(args.eval_sampler, args.clip_length, args.frame_interval, speed=[1.0, 1.0],
+                                      window=args.eval_window, seed=i)
+        val_transforms = transforms.Compose([
+            Resize((256, 256), False), crop_type, ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
+        val_transforms_flow = transforms.Compose([
+            Resize((256, 256), False), CenterCrop((224, 224)), ToTensorVid(dim=2), Normalize(mean=mean_1d, std=std_1d)])
         val_loader = MultitaskDatasetLoader(val_sampler, args.val_lists, args.dataset, tasks_per_dataset,
                                             batch_transform=val_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
                                             hand_list_prefix=args.hand_list_prefix[:],

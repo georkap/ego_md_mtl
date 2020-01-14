@@ -3,19 +3,21 @@ Author: Georgios Kapidis
 Author: Random sampling and sequential sampling Yunpeng Chen
 """
 import numpy as np
+import sys
 
+class UniformSampling(object):
+    def sampling(self, range_max, v_id=None, pred_failed=False, start_frame=0):
+        return np.linspace(start_frame, start_frame + range_max, num=16, dtype=np.int)
 
 class DoubleFullSampling(object):
     """samples every frame twice i.e. idxs = [0, 0, 1, 1, 2, 2, ... ]"""
     def sampling(self, range_max, v_id=None, pred_failed=False, start_frame=0):
         return list(np.repeat(list(range(range_max)), 2))
 
-
 class FullSampling(object):
     """samples all the frames in a video"""
     def sampling(self, range_max, v_id=None, pred_failed=False, start_frame=0):
         return list(range(range_max))
-
 
 class MiddleSampling(object):
     def __init__(self, num, window=32):
@@ -145,20 +147,22 @@ if __name__ == "__main__":
 #        # logging.info("{:d}: v_id = {}: {}".format(i, 1, sequential_sampler.sampling(range_max=9, v_id=1)))
 #        # logging.info("{:d}: v_id = {}: {}".format(i, 2, sequential_sampler.sampling(range_max=2, v_id=2)))
 #        # logging.info("{:d}: v_id = {}: {}".format(i, 3, sequential_sampler.sampling(range_max=3, v_id=3)))
-def prepare_sampler(sampler_type, clip_length, frame_interval, window=32):
+def prepare_sampler(sampler_type, clip_length, frame_interval, speed, window=32, seed=None):
     if sampler_type == "random":
-        train_sampler = RandomSampling(num=clip_length,
-                                       interval=frame_interval,
-                                       speed=[0.5, 1.5], seed=None)
+        train_sampler = RandomSampling(num=clip_length, interval=frame_interval, speed=speed, seed=seed)
         out_sampler = train_sampler
     elif sampler_type == 'sequential':
-        val_sampler = SequentialSampling(num=clip_length,
-                                         interval=frame_interval,
-                                         fix_cursor=True,
-                                         shuffle=True, seed=None)
+        val_sampler = SequentialSampling(num=clip_length, interval=frame_interval, fix_cursor=True, shuffle=True,
+                                         seed=seed)
         out_sampler = val_sampler
     elif sampler_type == 'middle':
         out_sampler = MiddleSampling(num=clip_length, window=window)
+    elif sampler_type == 'full':
+        out_sampler = FullSampling()
     elif sampler_type == 'doublefull':
-        pass
+        out_sampler = DoubleFullSampling()
+    elif sampler_type == 'uniform':
+        out_sampler = UniformSampling()
+    else:
+        sys.exit("Unknown frame sampling method. Exit status -2.")
     return out_sampler

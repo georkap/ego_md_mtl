@@ -36,7 +36,6 @@ def main():
     args, model_name = parse_args('mfnet', val=False)
     tasks_per_dataset = parse_tasks_str(args.tasks, args.dataset)
     objectives_text, objectives, task_sizes = parse_tasks_per_dataset(tasks_per_dataset)
-    num_cls_objectives, num_g_objectives, num_h_objectives, num_o_objectives, num_c_objectives = objectives
     num_classes, num_coords, num_objects, num_obj_cat = task_sizes
     output_dir, log_file = init_folders(args.base_output_dir, model_name, args.resume, args.logging)
     print_and_save(args, log_file)
@@ -109,7 +108,7 @@ def main():
         print_and_save("Resuming training from: {}".format(ckpt_path), log_file)
 
     # load dataset and train and validation iterators
-    train_sampler = prepare_sampler("random", args.clip_length, args.frame_interval)
+    train_sampler = prepare_sampler("random", args.clip_length, args.frame_interval, speed=[0.5, 1.5])
     train_transforms = transforms.Compose([
         RandomScale(make_square=True, aspect_ratio=[0.8, 1./0.8], slen=[224, 288]), RandomCrop((224, 224)),
         RandomHorizontalFlip(), RandomHLS_2(vars=[15, 35, 25]), ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
@@ -131,7 +130,8 @@ def main():
     train_iterator = torch.utils.data.DataLoader(train_loader, batch_size=args.batch_size, shuffle=True,
                                                  num_workers=args.num_workers, pin_memory=True)
 
-    test_sampler = prepare_sampler(args.eval_sampler, args.clip_length, args.frame_interval, args.eval_window)
+    test_sampler = prepare_sampler(args.eval_sampler, args.clip_length, args.frame_interval, speed=[1.0, 1.0],
+                                   window=args.eval_window)
     test_transforms = transforms.Compose([Resize((256, 256), False), CenterCrop((224, 224)), ToTensorVid(),
                                           Normalize(mean=mean_3d, std=std_3d)])
     test_transforms_flow = transforms.Compose([Resize((256, 256), False), CenterCrop((224, 224)), ToTensorVid(dim=2),
