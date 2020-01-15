@@ -40,7 +40,7 @@ class MiddleSampling(object):
             clip_end = middle + self.window//2
         idxs = np.linspace(clip_start, clip_end, self.num).astype(dtype=np.int).tolist()
         for idx in idxs:
-            assert idx >=start_frame and idx < start_frame+range_max
+            assert start_frame <= idx < start_frame + range_max
         return idxs
 
 

@@ -22,11 +22,11 @@ from src.models.mfnet_3d_mo_weighted import MFNET_3D_MO_WEIGHTED
 from src.models.mfnet_3d_mo_t_attn import MFNET_3D_MO_T_ATTN
 from src.utils.argparse_utils import parse_args, parse_tasks_str, parse_tasks_per_dataset
 from src.utils.file_utils import print_and_save, save_mt_checkpoints, init_folders, resume_checkpoint, load_pretrained_weights
-from src.utils.dataset.dataset_loader import MultitaskDatasetLoader
+from src.utils.dataset.dataset_loader import MultitaskDatasetLoader, MultitaskDatasetLoaderVideoLevel
 from src.utils.video_sampler import prepare_sampler
 from src.utils.dataset.dataset_loader_transforms import RandomScale, RandomCrop, RandomHorizontalFlip, RandomHLS_2, ToTensorVid,\
     Normalize, Resize, CenterCrop, PredefinedHorizontalFlip
-from src.utils.train_utils import train_mfnet_mo, test_mfnet_mo
+from src.utils.train_utils import train_mfnet_mo, test_mfnet_mo, test_mfnet_mo_map
 from src.utils.lr_utils import load_lr_scheduler
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from src.constants import *
@@ -146,12 +146,21 @@ def main():
     test_iterator = torch.utils.data.DataLoader(test_loader, batch_size=args.batch_size, shuffle=False,
                                                 num_workers=args.num_workers, pin_memory=True)
 
+    if args.eval_map_vl:
+        map_sampler = prepare_sampler('middle', 16, None, speed=None, window=args.eval_window)
+        map_loader = MultitaskDatasetLoaderVideoLevel(map_sampler, args.eval_lists_vl, args.dataset, tasks_per_dataset,
+                                                      test_transforms, vis_data=False)
+        map_iterator = torch.utils.data.DataLoader(map_loader, batch_size=2, shuffle=False,
+                                                   num_workers=args.num_workers, pin_memory=True)
+
     lr_scheduler = load_lr_scheduler(args.lr_type, args.lr_steps, optimizer, len(train_iterator))
 
     train = train_mfnet_mo
     test = test_mfnet_mo
     num_cls_tasks = objectives[0]
-    new_top1, top1 = [0.0] * num_cls_tasks, [0.0] * num_cls_tasks
+    top1 = [0.0] * num_cls_tasks
+    if args.eval_map_vl:
+        mAP = [0.0] * num_cls_tasks
     for epoch in range(args.max_epochs):
         train(model_ft, optimizer, train_iterator, tasks_per_dataset, epoch, log_file, args.gpus, lr_scheduler,
               moo=args.moo, use_flow=args.flow, one_obj_layer=args.one_object_layer,
@@ -166,6 +175,12 @@ def main():
                             t_attn=args.t_attn)
             top1 = save_mt_checkpoints(model_ft, optimizer, top1, new_top1, args.save_all_weights, output_dir,
                                        model_name, epoch)
+            if args.eval_map_vl:
+                new_mAP = test_mfnet_mo_map(model_ft, map_iterator, tasks_per_dataset, epoch, "Video level test", log_file,
+                                            args.gpus)
+                mAP = save_mt_checkpoints(model_ft, optimizer, mAP, new_mAP, args.save_all_weights, output_dir,
+                                          model_name, epoch, mAP=True)
+
             if isinstance(lr_scheduler, ReduceLROnPlateau):
                 lr_scheduler.step(new_top1[0])
 

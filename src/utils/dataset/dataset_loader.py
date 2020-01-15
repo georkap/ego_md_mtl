@@ -14,9 +14,9 @@ import torch
 
 from src.utils.dataset.DatasetInfo import DatasetInfo
 from src.utils.dataset.file_loading_utils import load_rgb_clip, load_flow_clip, load_hand_tracks, load_gaze_track, \
-    load_pickle, load_images2
+    load_pickle, load_images2, load_images3
 from src.utils.dataset.dataset_loader_transforms import get_scale_and_shift
-from src.utils.dataset.dataset_lines import EPICDataLine, GTEADataLine, SOMETHINGV1DataLine, ADLDataLine
+from src.utils.dataset.dataset_lines import *
 from src.utils.dataset.visualization_utils import visualize_item
 from src.constants import *
 
@@ -24,6 +24,15 @@ from src.constants import *
 def read_samples_list(list_file, datatype):
     return [datatype(row) for row in open(list_file)]
 
+def read_samples_list_vid_level(list_file, datatype):
+    video_list, sampled_centers = [], []
+    for row in open(list_file):
+        data_line = datatype(row)
+        centers_for_video = np.linspace(data_line.start_frame + 16, data_line.start_frame + data_line.num_frames - 16, 2).astype(np.int)
+        for center in centers_for_video:
+            video_list.append(data_line)
+            sampled_centers.append(center)
+    return video_list, sampled_centers
 
 def apply_transform_to_track(track, scale_x, scale_y, tl_x, tl_y, norm_val, is_flipped):
     track *= [scale_x, scale_y]
@@ -62,6 +71,98 @@ def object_list_to_ocpv(detections, num_obj_classes, categories):
         opcv[categories[dets_per_frame]] += 1
     return opcv/(np.max(opcv) if np.max(opcv) != 0 else 1)
 
+class MultitaskDatasetLoaderVideoLevel(torch.utils.data.Dataset):
+    def __init__(self, sampler, split_files, dataset_names, tasks_per_dataset, batch_transform, validation=False,
+                 vis_data=False):
+        self.sampler = sampler
+        self.video_list = list()
+        self.dataset_infos = dict()
+        self.sampled_centers = list()
+        for i, (dataset_name, split_file, td) in enumerate(zip(dataset_names, split_files, tasks_per_dataset)):
+            # charegoDataLineConstructor(dataset_name, 'video')
+            data_line = CHAREGO1DataLineVideo if dataset_name == 'charego1' else CHAREGO3DataLineVideo
+            img_tmpl = '{}-{:06d}.jpg'
+            cls_tasks = CHARADES_CLS_TASKS
+            max_num_classes = LABELS_CHARADES
+            sub_with_flow = 'clips_frames\\'
+            video_list, sampled_centers = read_samples_list_vid_level(split_file, data_line)
+            self.video_list += video_list
+            self.sampled_centers += sampled_centers
+
+            dat_info = DatasetInfo(i, dataset_name, data_line, img_tmpl, td, cls_tasks, max_num_classes,
+                                   None, None, None, None, video_list, sub_with_flow)
+            # self.maximum_target_size = tasks_for_dataset['max_target_size']
+            self.dataset_infos[dataset_name] = dat_info
+
+        self.transform = batch_transform
+        self.validation = validation
+        self.vis_data = vis_data
+
+    def __len__(self):
+        return len(self.video_list)
+
+    def __getitem__(self, index):
+        data_line = self.video_list[index]
+        if isinstance(data_line, CHAREGO1DataLineVideo):
+            dataset_name = 'charego1'
+        elif isinstance(data_line, CHAREGO3DataLineVideo):
+            dataset_name = 'charego3'
+        else:
+            # unknown type
+            sys.exit("Wrong data_line in dataloader.__getitem__ for mAP. Exit code -3")
+
+        dataset_info = self.dataset_infos[dataset_name]
+        (path, uid), (start_frame, frame_count), use_stuff, data_paths = data_line.parse(dataset_info)
+        use_hands, use_gaze, use_objects, use_obj_categories = use_stuff
+        hand_path, gaze_path, obj_path = data_paths
+
+        center = self.sampled_centers[index]
+        sampled_idxs = self.sampler.sampling(range_max=32, v_id=index, start_frame=center-16)
+
+        # leave the if clause just in case I ever enhance this for other datasets
+        if dataset_name in ['charego1', 'charego3']:
+            image_paths = [os.path.join(path, dataset_info.img_tmpl.format(uid, idx)) for idx in sampled_idxs]
+        else:
+            image_paths = [os.path.join(path, dataset_info.img_tmpl.format(idx)) for idx in sampled_idxs]
+
+        clip_rgb, sampled_frames = load_images3(image_paths, self.vis_data)
+        or_h, or_w, _ = clip_rgb.shape
+
+        orig_norm_val = [or_w, or_h]
+
+        if self.transform is not None:
+            clip_rgb = self.transform(clip_rgb)
+
+        if self.vis_data:
+            track_idxs = (np.array(sampled_idxs) - start_frame).astype(np.int)
+            visualize_item(sampled_frames, clip_rgb, track_idxs, use_hands, hand_path, None, None,
+                           use_gaze, gaze_path, None, or_w, or_h, orig_norm_val, False, None, None)
+
+        labels = list()
+        all_cls_tasks = self.dataset_infos[dataset_name].cls_tasks
+        all_cls_task_sizes = self.dataset_infos[dataset_name].max_num_classes.values()
+        all_cls_tasks_names = list(self.dataset_infos[dataset_name].max_num_classes.keys())
+        tasks_for_dataset = self.dataset_infos[dataset_name].td
+        # mappings = self.dataset_infos[dataset_name].mappings
+        for i, (cls_task, task_size) in enumerate(zip(all_cls_tasks, all_cls_task_sizes)):
+            if cls_task in tasks_for_dataset:
+                if cls_task == 'L' and dataset_name == 'adl':  # hack only for ADL location labels
+                    label_num = data_line.label_location(sampled_idxs)
+                else:
+                    label_num = getattr(data_line, all_cls_tasks_names[i])
+                mh = np.zeros(task_size)
+                mh[np.array(label_num)] = 1
+                labels = np.concatenate((labels, mh))
+
+        labels_dtype = np.int64
+        labels = np.array(labels, dtype=labels_dtype)
+        if self.validation:
+            to_return = (clip_rgb, labels, uid)
+        else:
+            dataset_id = self.dataset_infos[dataset_name].dataset_id
+            # putting labels twice as a hack to use init_inputs_batch function in train_utils
+            to_return = (clip_rgb, labels, labels, dataset_id)
+        return to_return
 
 class MultitaskDatasetLoader(torch.utils.data.Dataset):
     def __init__(self, sampler, split_files, dataset_names, tasks_per_dataset, batch_transform,
@@ -103,6 +204,13 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
                 cls_tasks = ADL_CLS_TASKS
                 max_num_classes = LABELS_ADL
                 sub_with_flow = 'ADL_frames\\'
+            elif dataset_name in ['charego1', 'charego3']:
+                # charegoDataLineConstructor(dataset_name, 'sample')
+                data_line = CHAREGO1DataLineSample if dataset_name == 'charego1' else CHAREGO3DataLineSample
+                img_tmpl = '{}-{:06d}.jpg'
+                cls_tasks = CHARADES_CLS_TASKS
+                max_num_classes = LABELS_CHARADES
+                sub_with_flow = 'clips_frames\\'
             else:
                 # undeveloped dataset yet e.g. something something v2 or whatever
                 sys.exit("Unknown dataset")
@@ -137,6 +245,10 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
             dataset_name = 'somv1'
         elif isinstance(data_line, ADLDataLine):
             dataset_name = 'adl'
+        elif isinstance(data_line, CHAREGO1DataLineSample):
+            dataset_name = 'charego1'
+        elif isinstance(data_line, CHAREGO3DataLineSample):
+            dataset_name = 'charego3'
         else:
             # unknown type
             sys.exit("Wrong data_line in dataloader.__getitem__. Exit code -2")
@@ -155,23 +267,30 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
         sampled_idxs = self.sampler.sampling(range_max=frame_count, v_id=index, start_frame=start_frame)
         # indices_time += (time.time() - t)
 
+        if dataset_name in ['charego1', 'charego3']:
+            image_paths = [os.path.join(path, dataset_info.img_tmpl.format(uid.split('_')[0], idx)) for idx in sampled_idxs]
+        else:
+            image_paths = [os.path.join(path, dataset_info.img_tmpl.format(idx)) for idx in sampled_idxs]
+
         # t = time.time()
         # load rgb images
         sampled_frames, clip_rgb = None, None
         if not self.only_flow:
             # clip_rgb, sampled_frames = load_rgb_clip(path, sampled_idxs, dataset_info)
-            clip_rgb, sampled_frames = load_images2(path, sampled_idxs, dataset_info.img_tmpl, self.vis_data)
+            # clip_rgb, sampled_frames = load_images2(path, sampled_idxs, dataset_info.img_tmpl, self.vis_data)
+            clip_rgb, sampled_frames = load_images3(image_paths, self.vis_data)
             or_h, or_w, _ = clip_rgb.shape
         # rgb_time += (time.time() - t)
 
         # load flow images
         sampled_flow, clip_flow = None, None
         if self.use_flow or self.only_flow:
+            # if ever I use flow again this needs fixing for charades frame name convention
             clip_flow, sampled_flow = load_flow_clip(path, sampled_idxs, dataset_info, self.only_flow)
             if self.only_flow:
                 or_h, or_w, _ = clip_flow.shape
 
-        orig_norm_val = [or_w, or_h]  # aparently if I do not load any rgb or flow images I get a warning
+        orig_norm_val = [or_w, or_h]  # apparently if I do not load any rgb or flow images I get a warning
 
         # t = time.time()
         track_idxs = (np.array(sampled_idxs) - start_frame).astype(np.int)
@@ -295,7 +414,7 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
         mappings = self.dataset_infos[dataset_name].mappings
         for i, cls_task in enumerate(all_cls_tasks):
             if cls_task in tasks_for_dataset:
-                if cls_task == 'L':
+                if cls_task == 'L' and dataset_name == 'adl': # hack only for ADL location labels
                     label_num = data_line.label_location(sampled_idxs)
                 else:
                     label_num = getattr(data_line, all_cls_tasks_names[i])
@@ -332,9 +451,8 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
             masks = np.concatenate((masks, [False] * (self.maximum_target_size - len(masks)))).astype(np.float32)
         # labels_time += (time.time() - t)
 
-
         # Validation is always dataset specific so no dataset_id is required,
-        # however the uid is expected to log the results
+        # however the uid is needed to log the results
         dataset_id = self.dataset_infos[dataset_name].dataset_id
         if self.validation:
             if self.use_flow:
@@ -371,7 +489,7 @@ if __name__ == '__main__':
     import torchvision.transforms as transforms
     from src.utils.dataset.dataset_loader_transforms import RandomScale, RandomCrop, RandomHorizontalFlip, RandomHLS_2, \
         ToTensorVid, Normalize, Resize, CenterCrop, PredefinedHorizontalFlip
-    from src.utils.video_sampler import RandomSampling
+    from src.utils.video_sampler import RandomSampling, MiddleSampling
     from src.utils.argparse_utils import parse_tasks_str
 
     mean_3d = [124 / 255, 117 / 255, 104 / 255]
@@ -400,13 +518,13 @@ if __name__ == '__main__':
     #### tests
     # Note: before running tests put working directory as the "main" files
     # 1 test dataloader for epic kitchens
-    task_str = 'N352C20'  # "V125N352" # "A2513N352H" ok # "A2513V125N352H" ok # "V125N351" ok # "V125H" ok # "A2513V125N351H" ok  # "A2513V125N351GH" crashes due to 'G'
-    datasets = ['epick']
-    video_list_file = [r"other\splits\EPIC_KITCHENS\epic_rgb_new_nd_val_act\epic_rgb_new_val_1.txt"]
-    _hlp = ['hand_detection_tracks_lr005_new']
-    _glp = ['gaze_tracks']
-    _olp = ['tracked_noun_bpv_oh_new']
-    _oclp = [r"D:\Datasets\egocentric\EPIC_KITCHENS\EPIC_categories.csv"]
+    # task_str = 'N352C20'  # "V125N352" # "A2513N352H" ok # "A2513V125N352H" ok # "V125N351" ok # "V125H" ok # "A2513V125N351H" ok  # "A2513V125N351GH" crashes due to 'G'
+    # datasets = ['epick']
+    # video_list_file = [r"other\splits\EPIC_KITCHENS\epic_rgb_new_nd_val_act\epic_rgb_new_val_1.txt"]
+    # _hlp = ['hand_detection_tracks_lr005_new']
+    # _glp = ['gaze_tracks']
+    # _olp = ['tracked_noun_bpv_oh_new']
+    # _oclp = [r"D:\Datasets\egocentric\EPIC_KITCHENS\EPIC_categories.csv"]
 
     # 2 test dataloader for egtea
     # task_str = "A106V19N53GH" # "N53GH" ok # "A106V19N53GH" ok
@@ -440,12 +558,65 @@ if __name__ == '__main__':
     # _glp = [None]
     # _olp = [None]
 
+    # 6 test dataloader for charego1
+    # task_str = "A157V33N38L16"
+    # datasets = ['charego1']
+    # video_list_file = [r"D:\Code\mtl_advanced\other\splits\CHARADES_EGO\fake1st_list.txt"]
+    # _hlp = [None]
+    # _glp = [None]
+    # _olp = [None]
+    # _oclp = [None]
+
+    # 7 test dataloader for charego3
+    # task_str = "A157V33N38L16"
+    # datasets = ['charego3']
+    # video_list_file = [r"D:\Code\mtl_advanced\other\splits\CHARADES_EGO\fake3rd_list.txt"]
+    # _hlp = [None]
+    # _glp = [None]
+    # _olp = [None]
+    # _oclp = [None]
+
+    # 8 test dataloader for charego1+charego3
+    # task_str = "A157V33N38L16+A157V33N38L16"
+    # datasets = ['charego1', 'charego3']
+    # video_list_file = [r"D:\Code\mtl_advanced\other\splits\CHARADES_EGO\fake1st_list.txt",
+    #                    r"D:\Code\mtl_advanced\other\splits\CHARADES_EGO\fake3rd_list.txt"]
+    # _hlp = [None]
+    # _glp = [None]
+    # _olp = [None]
+    # _oclp = [None]
+
+    # tpd = parse_tasks_str(task_str, datasets)
+    # loader = MultitaskDatasetLoader(test_sampler, video_list_file, datasets, tasks_per_dataset=tpd,
+    #                                 batch_transform=train_transforms, gaze_list_prefix=_glp, hand_list_prefix=_hlp,
+    #                                 object_list_prefix=_olp, object_categories=_oclp,
+    #                                 validation=False, eval_gaze=False, vis_data=True, use_flow=False,
+    #                                 flow_transforms=train_flow_transforms, only_flow=False)
+
+
+
+    # 9 test dataloader for charego1 video level
+    # task_str = "A157V33N38L16"
+    # datasets = ['charego1']
+    # video_list_file = [r"D:\Code\mtl_advanced\other\splits\CHARADES_EGO\fake1st_listvl.txt"]
+    # _hlp = [None]
+    # _glp = [None]
+    # _olp = [None]
+    # _oclp = [None]
+
+    # 10 test dataloader for charego1+charego3 video level
+    task_str = "A157V33N38L16+A157V33N38L16"
+    datasets = ['charego1', 'charego3']
+    video_list_file = [r"D:\Code\mtl_advanced\other\splits\CHARADES_EGO\fake1st_listvl.txt",
+                       r"D:\Code\mtl_advanced\other\splits\CHARADES_EGO\fake3rd_listvl.txt"]
+    _hlp = [None]
+    _glp = [None]
+    _olp = [None]
+    _oclp = [None]
+
     tpd = parse_tasks_str(task_str, datasets)
-    loader = MultitaskDatasetLoader(test_sampler, video_list_file, datasets, tasks_per_dataset=tpd,
-                                    batch_transform=train_transforms, gaze_list_prefix=_glp, hand_list_prefix=_hlp,
-                                    object_list_prefix=_olp, object_categories=_oclp,
-                                    validation=True, eval_gaze=False, vis_data=False, use_flow=False,
-                                    flow_transforms=train_flow_transforms, only_flow=False)
+    loader = MultitaskDatasetLoaderVideoLevel(MiddleSampling(16), video_list_file, datasets, tpd,
+                                              batch_transform=train_transforms, vis_data=True)
 
     # for ind in range(len(loader)):
     #     data_point = loader.__getitem__(ind)
@@ -460,7 +631,7 @@ if __name__ == '__main__':
     import time
 
     t0 = time.time()
-    for i in range(100):
+    for i in range(len(loader)):
         data_point = loader.__getitem__(i)
         print(data_point[1:])
     t1 = time.time()

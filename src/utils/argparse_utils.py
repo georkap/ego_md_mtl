@@ -11,7 +11,7 @@ import os, re, argparse, sys
 def make_base_parser(val):
     parser = argparse.ArgumentParser(description='Hand activity recognition')
 
-    parser.add_argument('dataset', type=str, nargs='*', choices=['epick', 'egtea', 'somv1', 'adl'])
+    parser.add_argument('dataset', type=str, nargs='*', choices=['epick', 'egtea', 'somv1', 'adl', 'charego1', 'charego3'])
     # Load the necessary paths    
     if not val:
         parser.add_argument('--train_lists', type=str, nargs='*')
@@ -106,6 +106,11 @@ def parse_args_eval(parser):
     parser.add_argument('--eval_crop', type=str, default='random', choices=['center', 'random'])
     parser.add_argument('--eval_ensemble', default=False, action='store_true')
     parser.add_argument('--eval_gaze', default=False, action='store_true')
+
+    parser.add_argument('--eval_map_vl', default=False, action='store_true',
+                        help='evaluate mean average precision on the video level as per charades dataset')
+    parser.add_argument('--eval_lists_vl', type=str, nargs='*')
+
     # it is a good design choice during evaluation to use a temporal window for the video
     # that lasts approx. 1 second, i.e. 32 frames for EGTEA and 64 for EPIC KITCHENS
     parser.add_argument('--eval_window', type=int, default=32)

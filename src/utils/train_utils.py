@@ -13,7 +13,7 @@ Functions that are used in training the network.
 import time
 import torch
 
-from src.utils.calc_utils import AverageMeter, accuracy, init_training_metrics, init_test_metrics, update_per_dataset_metrics
+from src.utils.calc_utils import AverageMeter, accuracy, init_training_metrics, init_test_metrics, init_map_metrics, update_per_dataset_metrics, charades_map
 from src.utils.learning_rates import CyclicLR
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from src.losses.mtl_losses import get_mtl_losses, multiobjective_gradient_optimization
@@ -67,6 +67,38 @@ def init_inputs_batch(data, tasks_per_dataset, use_flow, base_gpu):
     inputs, targets, masks, dataset_ids = init_inputs(data, use_flow, base_gpu)
     batch_ids_per_dataset = init_batch(tasks_per_dataset, dataset_ids)
     return inputs, targets, masks, dataset_ids, batch_ids_per_dataset
+
+def val_outputs_per_dataset(network_output, targets, tasks_per_dataset, batch_ids_per_dataset):
+    (outputs, coords, heatmaps, probabilities, objects, obj_cat) = network_output
+    outputs_per_dataset = []
+    targets_per_dataset = []
+    global_task_id = 0  # assign indices to keep track of the tasks because the model outputs come in a sequence
+    global_coord_id = 0
+    global_object_id = 0
+    global_obj_cat_id = 0
+    for dataset_id in range(len(tasks_per_dataset)):
+        num_cls_tasks = tasks_per_dataset[dataset_id]['num_cls_tasks']
+        num_g_tasks = tasks_per_dataset[dataset_id]['num_g_tasks']
+        num_h_tasks = tasks_per_dataset[dataset_id]['num_h_tasks']
+        num_o_tasks = tasks_per_dataset[dataset_id]['num_o_tasks']
+        num_c_tasks = tasks_per_dataset[dataset_id]['num_c_tasks']
+        num_coord_tasks = num_g_tasks + 2 * num_h_tasks
+        tmp_targets = targets[batch_ids_per_dataset[dataset_id]]
+        targets_per_dataset.append(tmp_targets)
+        outputs_per_dataset.append([])
+        # when a dataset does not have any representative samples in a batch
+        if not len(tmp_targets.transpose(0, 1)[0]) > 0:
+            global_task_id += num_cls_tasks
+            global_coord_id += num_coord_tasks
+            global_object_id += num_o_tasks
+            global_obj_cat_id += num_c_tasks
+            continue
+        # get model's outputs for the classification tasks for the current dataset
+        for task_id in range(num_cls_tasks):
+            tmp_outputs = outputs[global_task_id + task_id][batch_ids_per_dataset[dataset_id]]
+            outputs_per_dataset[dataset_id].append(tmp_outputs)
+
+    return outputs_per_dataset, targets_per_dataset
 
 def calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, batch_ids_per_dataset, one_obj_layer,
                             is_training, base_gpu, dataset_metrics, multioutput_loss=0, t_attn=False):
@@ -362,6 +394,62 @@ def test_mfnet_mo(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_ty
                 task_top1s.append(tasktop1.avg)
 
     return task_top1s
+
+def test_mfnet_mo_map(model, iterator, tasks_per_dataset, cur_epoch, dataset_type, log_file, gpus):
+    dataset_outputs, dataset_gts, dataset_ids = [], [], []
+    for i, dat in enumerate(tasks_per_dataset):
+        num_cls_tasks = dat['num_cls_tasks']
+        dataset_outputs.append([])
+        dataset_gts.append([])
+        dataset_ids.append([])
+        for _ in range(num_cls_tasks):
+            dataset_outputs[i].append([])
+            dataset_gts[i].append([])
+            dataset_ids[i].append([])
+
+    with torch.no_grad():
+        model.eval()
+        print_and_save('mAP evaluation after epoch: {} on {} set'.format(cur_epoch, dataset_type), log_file)
+        for batch_idx, data in enumerate(iterator):
+            # small overhead here, don't really need it
+            inputs, targets, _, dataset_ids, batch_ids_per_dataset = init_inputs_batch(data, tasks_per_dataset, False, gpus[0])
+
+            assert len(set(dataset_ids.numpy())) == 1 # https://stackoverflow.com/questions/3787908/python-determine-if-all-items-of-a-list-are-the-same-item
+            cur_dat_id = dataset_ids[0].item()
+
+            network_output = model(inputs)
+            outputs_per_dataset, targets_per_dataset = val_outputs_per_dataset(
+                network_output, targets, tasks_per_dataset, batch_ids_per_dataset)
+
+            # sublist per dataset task here, probably size 4 (for 4 tasks) and inside the tensor with the data [Bxlogits]
+            outputs_per_dataset = outputs_per_dataset[cur_dat_id]
+            targets_per_dataset = targets_per_dataset[cur_dat_id]
+
+            num_cls_tasks = tasks_per_dataset[cur_dat_id]['num_cls_tasks']
+            global_target_start = 0
+            for task_id in range(num_cls_tasks):
+                task_outputs = outputs_per_dataset[task_id] # [Bxlogits]
+                task_size = task_outputs.size(1)
+                task_outputs_vid = task_outputs.mean(dim=0)
+                task_targets = targets_per_dataset[0][global_target_start:global_target_start+task_size]
+                global_target_start += task_size
+
+                dataset_outputs[cur_dat_id][task_id].append(task_outputs_vid.cpu().numpy())
+                dataset_gts[cur_dat_id][task_id].append(task_targets.cpu().numpy())
+
+    task_maps = list()
+    # mAP calculation per dataset per task
+    for d_id, dat in enumerate(tasks_per_dataset):
+        num_cls_tasks = dat['num_cls_tasks']
+        for t_id in range(num_cls_tasks):
+            mAP, _, ap = charades_map(np.vstack(dataset_outputs[d_id][t_id]), np.vstack(dataset_gts[d_id][t_id]))
+            print_and_save("Dataset {} Task {}".format(d_id, t_id), log_file)
+            print_and_save(ap, log_file)
+            print_and_save('mAP {:.3f}'.format(mAP), log_file)
+            # submission_file(ids, outputs, '{}/epoch_{:03d}.txt'.format(args.cache, epoch+1))
+            task_maps.append(mAP)
+
+    return task_maps
 
 def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_file, use_flow=False, one_obj_layer=False,
                       multioutput_loss=0, eval_branch=None, eval_ensemble=False, t_attn=False):

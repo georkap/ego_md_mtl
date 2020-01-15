@@ -20,7 +20,7 @@ class DatasetInfo(object):
         self.num_classes = list()
         self.mappings = list()
 
-        for task_short, task_long in zip(cls_tasks, list(max_num_classes.keys())): # works in python 3.7 because dicts are ordered
+        for task_short, task_long in zip(cls_tasks, list(max_num_classes.keys())): # works in python 3.6+ because dicts are ordered
             if task_short in tasks_for_dataset:
                 value = tasks_for_dataset[task_short]
                 self.num_classes.append(value)
