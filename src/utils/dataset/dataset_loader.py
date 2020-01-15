@@ -28,7 +28,7 @@ def read_samples_list_vid_level(list_file, datatype):
     video_list, sampled_centers = [], []
     for row in open(list_file):
         data_line = datatype(row)
-        centers_for_video = np.linspace(data_line.start_frame + 16, data_line.start_frame + data_line.num_frames - 16, 2).astype(np.int)
+        centers_for_video = np.linspace(data_line.start_frame + 16, data_line.start_frame + data_line.num_frames - 16, 25).astype(np.int)
         for center in centers_for_video:
             video_list.append(data_line)
             sampled_centers.append(center)

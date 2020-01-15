@@ -150,7 +150,7 @@ def main():
         map_sampler = prepare_sampler('middle', 16, None, speed=None, window=args.eval_window)
         map_loader = MultitaskDatasetLoaderVideoLevel(map_sampler, args.eval_lists_vl, args.dataset, tasks_per_dataset,
                                                       test_transforms, vis_data=False)
-        map_iterator = torch.utils.data.DataLoader(map_loader, batch_size=2, shuffle=False,
+        map_iterator = torch.utils.data.DataLoader(map_loader, batch_size=25, shuffle=False,
                                                    num_workers=args.num_workers, pin_memory=True)
 
     lr_scheduler = load_lr_scheduler(args.lr_type, args.lr_steps, optimizer, len(train_iterator))
