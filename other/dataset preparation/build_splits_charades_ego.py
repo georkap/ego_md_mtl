@@ -130,6 +130,8 @@ for key, val in annotations.items():
             end_frame = int(end_time / length * num_video_frames)
             assert end_frame <= num_video_frames
             num_segment_frames = end_frame - start_frame # end frame should be exclusive so I do not add +1 for the 0-based start_frames
+            if num_segment_frames < 4:
+                continue
 
             out_line = "{} {} {} {} {} {} {} {}\n".format(segment_dir, num_segment_frames, verb_class, noun_class,
                                                           location_class, uid, start_frame, action_class)
