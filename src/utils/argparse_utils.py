@@ -110,6 +110,7 @@ def parse_args_eval(parser):
     parser.add_argument('--eval_map_vl', default=False, action='store_true',
                         help='evaluate mean average precision on the video level as per charades dataset')
     parser.add_argument('--eval_lists_vl', type=str, nargs='*')
+    parser.add_argument('--eval_map_vid_splits', type=int, default=25)
 
     # it is a good design choice during evaluation to use a temporal window for the video
     # that lasts approx. 1 second, i.e. 32 frames for EGTEA and 64 for EPIC KITCHENS

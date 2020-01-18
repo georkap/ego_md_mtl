@@ -24,11 +24,12 @@ from src.constants import *
 def read_samples_list(list_file, datatype):
     return [datatype(row) for row in open(list_file)]
 
-def read_samples_list_vid_level(list_file, datatype):
+def read_samples_list_vid_level(list_file, datatype, video_splits):
     video_list, sampled_centers = [], []
     for row in open(list_file):
         data_line = datatype(row)
-        centers_for_video = np.linspace(data_line.start_frame + 16, data_line.start_frame + data_line.num_frames - 16, 25).astype(np.int)
+        centers_for_video = np.linspace(data_line.start_frame + 16, data_line.start_frame + data_line.num_frames - 16,
+                                        video_splits).astype(np.int)
         for center in centers_for_video:
             video_list.append(data_line)
             sampled_centers.append(center)
@@ -72,8 +73,8 @@ def object_list_to_ocpv(detections, num_obj_classes, categories):
     return opcv/(np.max(opcv) if np.max(opcv) != 0 else 1)
 
 class MultitaskDatasetLoaderVideoLevel(torch.utils.data.Dataset):
-    def __init__(self, sampler, split_files, dataset_names, tasks_per_dataset, batch_transform, validation=False,
-                 vis_data=False):
+    def __init__(self, sampler, split_files, dataset_names, tasks_per_dataset, batch_transform, video_splits=25,
+                 validation=False, vis_data=False):
         self.sampler = sampler
         self.video_list = list()
         self.dataset_infos = dict()
@@ -85,7 +86,7 @@ class MultitaskDatasetLoaderVideoLevel(torch.utils.data.Dataset):
             cls_tasks = CHARADES_CLS_TASKS
             max_num_classes = LABELS_CHARADES
             sub_with_flow = 'clips_frames\\'
-            video_list, sampled_centers = read_samples_list_vid_level(split_file, data_line)
+            video_list, sampled_centers = read_samples_list_vid_level(split_file, data_line, video_splits)
             self.video_list += video_list
             self.sampled_centers += sampled_centers
 

@@ -38,11 +38,11 @@ from src.models.mfnet_3d_mo_weighted import MFNET_3D_MO_WEIGHTED
 from src.models.mfnet_3d_mo_t_attn import MFNET_3D_MO_T_ATTN
 from src.utils.argparse_utils import parse_args, make_log_file_name, parse_tasks_str, parse_tasks_per_dataset, compare_tasks_per_dataset
 from src.utils.file_utils import print_and_save
-from src.utils.dataset.dataset_loader import MultitaskDatasetLoader
+from src.utils.dataset.dataset_loader import MultitaskDatasetLoader, MultitaskDatasetLoaderVideoLevel
 from src.utils.dataset.dataset_loader_transforms import Resize, RandomCrop, ToTensorVid, Normalize, CenterCrop
 from src.utils.calc_utils import eval_final_print_mt
 from src.utils.video_sampler import prepare_sampler
-from src.utils.train_utils import validate_mfnet_mo, validate_mfnet_mo_gaze
+from src.utils.train_utils import validate_mfnet_mo, validate_mfnet_mo_gaze, test_mfnet_mo_map
 from src.constants import *
 
 np.set_printoptions(linewidth=np.inf, threshold=np.inf)
@@ -138,6 +138,14 @@ def main():
         val_iter = torch.utils.data.DataLoader(val_loader, batch_size=args.batch_size, shuffle=False,
                                                num_workers=args.num_workers, pin_memory=True)
 
+        if args.eval_map_vl:
+            map_sampler = prepare_sampler('middle', 16, None, speed=None, window=args.eval_window)
+            map_loader = MultitaskDatasetLoaderVideoLevel(map_sampler, args.eval_lists_vl, args.dataset,
+                                                          tasks_per_dataset, val_transforms,
+                                                          video_splits=args.eval_map_vid_splits, vis_data=False)
+            map_iterator = torch.utils.data.DataLoader(map_loader, batch_size=args.eval_map_vid_splits, shuffle=False,
+                                                       num_workers=args.num_workers, pin_memory=True)
+
         # evaluate single dataset
         if args.eval_gaze:
             validate = validate_mfnet_mo_gaze
@@ -172,6 +180,10 @@ def main():
                                                          actions_file=args.epic_actions_path)
             overall_mean_cls_acc[ind] += mean_cls_acc
             overall_top1[ind] += top1_acc
+
+        if args.eval_map_vl:
+            new_mAP = test_mfnet_mo_map(model_ft, map_iterator, tasks_per_dataset, checkpoint['epoch'],
+                                        "Video level test", log_file, args.gpus, video_splits=args.eval_map_vid_splits)
 
     print_and_save("", log_file)
     text_mean_cls_acc = "Mean Cls Acc ({} times)".format(args.mfnet_eval)

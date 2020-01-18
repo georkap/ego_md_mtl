@@ -395,7 +395,7 @@ def test_mfnet_mo(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_ty
 
     return task_top1s
 
-def test_mfnet_mo_map(model, iterator, tasks_per_dataset, cur_epoch, dataset_type, log_file, gpus):
+def test_mfnet_mo_map(model, iterator, tasks_per_dataset, cur_epoch, dataset_type, log_file, gpus, video_splits=25):
     dataset_outputs, dataset_gts, dataset_ids = [], [], []
     for i, dat in enumerate(tasks_per_dataset):
         num_cls_tasks = dat['num_cls_tasks']
@@ -410,6 +410,7 @@ def test_mfnet_mo_map(model, iterator, tasks_per_dataset, cur_epoch, dataset_typ
     with torch.no_grad():
         model.eval()
         print_and_save('mAP evaluation after epoch: {} on {} set'.format(cur_epoch, dataset_type), log_file)
+        print_and_save('mAP for {} segments per video'.format(video_splits))
         for batch_idx, data in enumerate(iterator):
             # small overhead here, don't really need it
             inputs, targets, _, dataset_ids, batch_ids_per_dataset = init_inputs_batch(data, tasks_per_dataset, False, gpus[0])
