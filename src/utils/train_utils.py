@@ -410,7 +410,7 @@ def test_mfnet_mo_map(model, iterator, tasks_per_dataset, cur_epoch, dataset_typ
     with torch.no_grad():
         model.eval()
         print_and_save('mAP evaluation after epoch: {} on {} set'.format(cur_epoch, dataset_type), log_file)
-        print_and_save('mAP for {} segments per video'.format(video_splits))
+        print_and_save('mAP for {} segments per video'.format(video_splits), log_file)
         for batch_idx, data in enumerate(iterator):
             # small overhead here, don't really need it
             inputs, targets, _, dataset_ids, batch_ids_per_dataset = init_inputs_batch(data, tasks_per_dataset, False, gpus[0])
