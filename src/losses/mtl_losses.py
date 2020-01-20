@@ -49,13 +49,16 @@ def get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_pe
         weight = torch.zeros(125, dtype=torch.float, device=base_gpu)
         weight[list(gtea_mapped_verbs.values())] = 1
         loss_for_task = F.cross_entropy(tmp_outputs, cls_targets[1], weight=weight, reduction='sum')
-        cls_losses[1] = (cls_losses[1] + loss_for_task) / batch_size
+        cls_losses[1] += loss_for_task
 
         tmp_outputs = task_outputs[2][batch_ids_per_dataset[1]]
         weight = torch.zeros(352, dtype=torch.float, device=base_gpu)
         weight[list(gtea_mapped_nouns.values())] = 1
         loss_for_task = F.cross_entropy(tmp_outputs, cls_targets[2], weight=weight, reduction='sum')
-        cls_losses[2] = (cls_losses[2] + loss_for_task) / batch_size
+        cls_losses[2] += loss_for_task
+
+    cls_losses[1] /= batch_size
+    cls_losses[2] /= batch_size
 
     loss = sum(cls_losses) # sum the classification losses for the 4 combined classification tasks
 
