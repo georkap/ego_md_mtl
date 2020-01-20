@@ -7,8 +7,7 @@ from src.constants import gtea_mapped_verbs, gtea_mapped_nouns
 
 
 def get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_per_dataset, comb_tasks_per_dataset,
-                        batch_ids_per_dataset, base_gpu):
-    batch_size = len(batch_ids_per_dataset)
+                        batch_ids_per_dataset, base_gpu, batch_size):
 
     cls_losses = []
     # epic dataset_id = 0

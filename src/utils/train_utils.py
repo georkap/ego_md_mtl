@@ -107,6 +107,10 @@ def calc_losses_per_dataset_comb(network_outputs, targets, masks, tasks_per_data
 
     (outputs, coords, heatmaps, probabilities, objects, obj_cat) = network_outputs
 
+    dataset_batch_size_0 = len(batch_ids_per_dataset[0])
+    dataset_batch_size_1 = len(batch_ids_per_dataset[1])
+    batch_size = dataset_batch_size_0 + dataset_batch_size_1
+
     # split task outputs
     task_outputs = list()
     task_outputs.append(outputs[0][batch_ids_per_dataset[0]])  # actions epic
@@ -128,17 +132,12 @@ def calc_losses_per_dataset_comb(network_outputs, targets, masks, tasks_per_data
     task_targets.append(tmp_targets_1[2])
 
     full_loss, partial_losses = get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_per_dataset,
-                                                    comb_tasks_per_dataset, batch_ids_per_dataset, base_gpu)
+                                                    comb_tasks_per_dataset, batch_ids_per_dataset, base_gpu, batch_size)
 
     cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses = partial_losses
 
     # update metrics
     full_losses, dataset_metrics = metrics
-
-    dataset_batch_size_0 = len(batch_ids_per_dataset[0])
-    dataset_batch_size_1 = len(batch_ids_per_dataset[1])
-    batch_size = dataset_batch_size_0 + dataset_batch_size_1
-
     if dataset_batch_size_0 > 0:
         t1, t5 = accuracy(task_outputs[0].detach().cpu(), task_targets[0].detach().cpu().long(), topk=(1, 5))
         dataset_metrics[0]['top1_meters'][0].update(t1.item(), dataset_batch_size_0)
