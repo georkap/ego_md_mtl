@@ -15,7 +15,8 @@ def gaze_loss(targets, masks, targets_start_from, masks_start_from, coords, heat
 
 def hand_loss(targets, masks, targets_start_from, masks_start_from, coords, heatmaps, probabilities, slice_from):
     hand_targets = targets[targets_start_from:targets_start_from + 32, :].transpose(1, 0).reshape(-1, 8, 2, 2)
-    hand_masks = masks[:, masks_start_from:masks_start_from+16].reshape(-1, 8, 2).squeeze()
+    hand_masks = masks[:, masks_start_from:masks_start_from+16].reshape(-1, 2, 8).transpose(1, 2).squeeze()
+    # hand_masks = masks[:, masks_start_from:masks_start_from+16].reshape(-1, 8, 2).squeeze()
     # for hands slice the last two elements, first is left, second is right hand
     hand_coords = coords[:, :, slice_from:slice_from + 2, :]
     hand_heatmaps = heatmaps[:, :, slice_from:slice_from + 2, :]

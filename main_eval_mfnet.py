@@ -50,7 +50,7 @@ torch.set_printoptions(linewidth=1000000, threshold=1000000)
 
 def main():
     args = parse_args('mfnet', val=True)
-    tasks_per_dataset = parse_tasks_str(args.tasks, args.dataset)
+    tasks_per_dataset = parse_tasks_str(args)
     if args.eval_tasks is not None: # trained multi-dataset eval single-dataset
         eval_tasks_per_dataset = parse_tasks_str(args.eval_tasks, [args.eval_dataset])
         starting_cls_id, starting_g_id, starting_h_id = compare_tasks_per_dataset(tasks_per_dataset,

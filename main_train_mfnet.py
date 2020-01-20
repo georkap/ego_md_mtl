@@ -13,6 +13,7 @@ import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 
 from src.models.mfnet_3d_mo import MFNET_3D_MO
+from src.models.mfnet_3d_mo_comb import MFNET_3D_MO_COMB
 from src.models.mfnet_3d_slowfast import MFNET_3D_SF
 from src.models.mfnet_3d_mo_mm import MFNET_3D_MO_MM
 from src.models.mfnet_3d_mo_dfb import MFNET_3D_DFB
@@ -26,7 +27,7 @@ from src.utils.dataset.dataset_loader import MultitaskDatasetLoader, MultitaskDa
 from src.utils.video_sampler import prepare_sampler
 from src.utils.dataset.dataset_loader_transforms import RandomScale, RandomCrop, RandomHorizontalFlip, RandomHLS_2, ToTensorVid,\
     Normalize, Resize, CenterCrop, PredefinedHorizontalFlip
-from src.utils.train_utils import train_mfnet_mo, test_mfnet_mo, test_mfnet_mo_map
+from src.utils.train_utils import train_mfnet_mo, test_mfnet_mo, test_mfnet_mo_map, train_mfnet_mo_comb, test_mfnet_mo_comb
 from src.utils.lr_utils import load_lr_scheduler
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from src.constants import *
@@ -34,7 +35,7 @@ from src.constants import *
 
 def main():
     args, model_name = parse_args('mfnet', val=False)
-    tasks_per_dataset = parse_tasks_str(args.tasks, args.dataset)
+    tasks_per_dataset = parse_tasks_str(args)
     objectives_text, objectives, task_sizes = parse_tasks_per_dataset(tasks_per_dataset)
     num_classes, num_coords, num_objects, num_obj_cat = task_sizes
     output_dir, log_file = init_folders(args.base_output_dir, model_name, args.resume, args.logging)
@@ -67,6 +68,8 @@ def main():
     elif args.tdn:
         mfnet_3d = MFNET_3D_TDN
         multioutput_loss = 3
+    elif args.map_tasks:
+        mfnet_3d = MFNET_3D_MO_COMB
     else:
         mfnet_3d = MFNET_3D_MO
         if args.only_flow:
@@ -126,7 +129,8 @@ def main():
                                           object_list_prefix=args.object_list_prefix[:],
                                           object_categories=args.object_cats[:],
                                           use_flow=args.flow, flow_transforms=train_transforms_flow,
-                                          only_flow=args.only_flow)
+                                          only_flow=args.only_flow,
+                                          map_to_epic=args.map_tasks)
     train_iterator = torch.utils.data.DataLoader(train_loader, batch_size=args.batch_size, shuffle=True,
                                                  num_workers=args.num_workers, pin_memory=True)
 
@@ -142,7 +146,8 @@ def main():
                                          object_list_prefix=args.object_list_prefix[:],
                                          object_categories=args.object_cats[:],
                                          use_flow=args.flow, flow_transforms=test_transforms_flow,
-                                         only_flow=args.only_flow)
+                                         only_flow=args.only_flow,
+                                         map_to_epic=args.map_tasks)
     test_iterator = torch.utils.data.DataLoader(test_loader, batch_size=args.batch_size, shuffle=False,
                                                 num_workers=args.num_workers, pin_memory=True)
 
@@ -155,15 +160,19 @@ def main():
 
     lr_scheduler = load_lr_scheduler(args.lr_type, args.lr_steps, optimizer, len(train_iterator))
 
-    train = train_mfnet_mo
-    test = test_mfnet_mo
+    if args.map_tasks:
+        train = train_mfnet_mo_comb
+        test = test_mfnet_mo_comb
+    else:
+        train = train_mfnet_mo
+        test = test_mfnet_mo
     num_cls_tasks = objectives[0]
     top1 = [0.0] * num_cls_tasks
     if args.eval_map_vl:
         mAP = [0.0] * num_cls_tasks
     for epoch in range(args.max_epochs):
-        train(model_ft, optimizer, train_iterator, tasks_per_dataset, epoch, log_file, args.gpus, lr_scheduler,
-              moo=args.moo, use_flow=args.flow, one_obj_layer=args.one_object_layer,
+        train(model_ft, optimizer, train_iterator, tasks_per_dataset, epoch, log_file, args.gpus,
+              lr_scheduler=lr_scheduler, moo=args.moo, use_flow=args.flow, one_obj_layer=args.one_object_layer,
               grad_acc_batches=args.grad_acc_batches, multioutput_loss=multioutput_loss, t_attn=args.t_attn)
         if (epoch+1) % args.eval_freq == 0:
             if args.eval_on_train:

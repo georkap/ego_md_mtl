@@ -169,13 +169,14 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
     def __init__(self, sampler, split_files, dataset_names, tasks_per_dataset, batch_transform,
                  gaze_list_prefix, hand_list_prefix, object_list_prefix, object_categories,
                  validation=False, eval_gaze=False, vis_data=False, use_flow=False, flow_transforms=None,
-                 only_flow=False):
+                 only_flow=False, map_to_epic=False):
         self.sampler = sampler
         # 1-1 association between dataset name, split file and resp tasks
         assert len(dataset_names) == len(tasks_per_dataset)
         self.video_list = list()
         self.dataset_infos = dict()
         self.maximum_target_size = 0
+        map_gtea = False
         for i, (dataset_name, split_file, td) in enumerate(zip(dataset_names, split_files, tasks_per_dataset)):
             glp = gaze_list_prefix.pop(0) if 'G' in td else None
             hlp = hand_list_prefix.pop(0) if 'H' in td else None
@@ -193,6 +194,8 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
                 cls_tasks = GTEA_CLS_TASKS
                 max_num_classes = LABELS_GTEA
                 sub_with_flow = 'clips_frames\\'
+                if map_to_epic:
+                    map_gtea = True
             elif dataset_name == 'somv1':
                 data_line = SOMETHINGV1DataLine
                 img_tmpl = '{:05d}.jpg'
@@ -217,7 +220,7 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
                 sys.exit("Unknown dataset")
             video_list = read_samples_list(split_file, data_line)
             dat_info = DatasetInfo(i, dataset_name, data_line, img_tmpl, td, cls_tasks, max_num_classes, glp, hlp, olp,
-                                   ocp, video_list, sub_with_flow)
+                                   ocp, video_list, sub_with_flow, map_gtea)
             self.maximum_target_size = td['max_target_size'] if td['max_target_size'] > self.maximum_target_size else self.maximum_target_size
             self.dataset_infos[dataset_name] = dat_info
             self.video_list += video_list

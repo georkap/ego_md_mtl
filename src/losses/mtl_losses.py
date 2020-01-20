@@ -3,6 +3,96 @@ import torch.nn.functional as F
 from src.losses.coord_loss import gaze_loss, hand_loss
 from src.losses.object_loss import object_loss
 from src.losses.min_norm_solvers import MinNormSolver, gradient_normalizers
+from src.constants import gtea_mapped_verbs, gtea_mapped_nouns
+
+
+def get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_per_dataset, comb_tasks_per_dataset,
+                        batch_ids_per_dataset, base_gpu):
+    batch_size = len(batch_ids_per_dataset)
+
+    cls_losses = []
+    # epic dataset_id = 0
+    # cls targets
+    tmp_targets_0 = targets[batch_ids_per_dataset[0]].transpose(0, 1)
+    if not len(tmp_targets_0[0] > 0): # if epic has targets in the batch calculate the classification losses
+        for i in range(3):
+            cls_losses.append(0)
+    else:
+        num_cls_tasks = tasks_per_dataset[0]['num_cls_tasks']
+        cls_targets = tmp_targets_0[:num_cls_tasks, :].long()
+        # cls losses
+        tmp_outputs = task_outputs[0]  # actions
+        loss_for_task = F.cross_entropy(tmp_outputs, cls_targets[0])
+        cls_losses.append(loss_for_task)
+
+        tmp_outputs = task_outputs[1][batch_ids_per_dataset[0]]  # verbs
+        loss_for_task = F.cross_entropy(tmp_outputs, cls_targets[1], reduction='sum')
+        cls_losses.append(loss_for_task)
+
+        tmp_outputs = task_outputs[2][batch_ids_per_dataset[0]]  # nouns
+        loss_for_task = F.cross_entropy(tmp_outputs, cls_targets[2], reduction='sum')
+        cls_losses.append(loss_for_task)
+    # egtea dataset_id = 1
+    # cls targets
+    tmp_targets_1 = targets[batch_ids_per_dataset[1]].transpose(0, 1)
+    if not len(tmp_targets_1[0] > 0): # if gtea has targets in the batch calculate the classification losses
+        cls_losses.append(0)  # just for the 4th task
+    else:
+        num_cls_tasks = tasks_per_dataset[1]['num_cls_tasks']
+        cls_targets = tmp_targets_1[:num_cls_tasks, :].long()
+        # cls losses
+        tmp_outputs = task_outputs[3]  # actions
+        loss_for_task = F.cross_entropy(tmp_outputs, cls_targets[0])
+        cls_losses.append(loss_for_task)
+
+        tmp_outputs = task_outputs[1][batch_ids_per_dataset[1]]  # verbs
+        weight = torch.zeros(125, dtype=torch.float, device=base_gpu)
+        weight[list(gtea_mapped_verbs.values())] = 1
+        loss_for_task = F.cross_entropy(tmp_outputs, cls_targets[1], weight=weight, reduction='sum')
+        cls_losses[1] = (cls_losses[1] + loss_for_task) / batch_size
+
+        tmp_outputs = task_outputs[2][batch_ids_per_dataset[1]]
+        weight = torch.zeros(352, dtype=torch.float, device=base_gpu)
+        weight[list(gtea_mapped_nouns.values())] = 1
+        loss_for_task = F.cross_entropy(tmp_outputs, cls_targets[2], weight=weight, reduction='sum')
+        cls_losses[2] = (cls_losses[2] + loss_for_task) / batch_size
+
+    loss = sum(cls_losses) # sum the classification losses for the 4 combined classification tasks
+
+    gaze_coord_losses, hand_coord_losses = [], []
+    if len(tmp_targets_1[0] > 0): # if gtea has targets in the batch calculate the gaze and hand losses
+        # treat gaze task only for 1 dataset
+        # continuing with targets for dataset_id = 1 hense below line is commented
+        tmp_targets_1 = targets[batch_ids_per_dataset[1]]
+        tmp_masks = masks[batch_ids_per_dataset[1]]
+        coords_gaze = coords[batch_ids_per_dataset[1]]
+        heatmaps_gaze = heatmaps[batch_ids_per_dataset[1]]
+        gaze_coord_loss = gaze_loss(tmp_targets_1.transpose(0, 1), tmp_masks, targets_start_from=3, masks_start_from=0,
+                                    coords=coords_gaze, heatmaps=heatmaps_gaze, probabilities=None, slice_ind=0)
+        loss = loss + gaze_coord_loss
+        gaze_coord_losses.append(gaze_coord_loss)
+    else:
+        gaze_coord_losses.append(0)
+
+    # treat hands task as if it comes from 1 dataset as a whole
+    coords_hands = coords[:, :, 1:, :]
+    heatmaps_hands = heatmaps[:, :, 1:, :]
+    # to do this I need to synthesize the batch of combined targets
+    # targets = targets.transpose(0, 1)
+    combined_hand_targets = torch.zeros_like(targets)
+    combined_hand_targets[batch_ids_per_dataset[0], :32] = targets[batch_ids_per_dataset[0]][:, 3:35]
+    combined_hand_targets[batch_ids_per_dataset[1], :32] = targets[batch_ids_per_dataset[1]][:, 19:51]
+    combined_hand_masks = torch.zeros_like(masks)
+    combined_hand_masks[batch_ids_per_dataset[0], :16] = masks[batch_ids_per_dataset[0]][:, :16]
+    combined_hand_masks[batch_ids_per_dataset[1], :16] = masks[batch_ids_per_dataset[1]][:, 8:24]
+    hand_coord_loss = hand_loss(combined_hand_targets.transpose(0, 1), combined_hand_masks, targets_start_from=0, masks_start_from=0,
+                                coords=coords_hands, heatmaps=heatmaps_hands, probabilities=None, slice_from=0)
+    loss = loss + hand_coord_loss
+    hand_coord_losses.append(hand_coord_loss)
+
+    object_losses, obj_cat_losses = [], []
+    partial_losses = cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses
+    return loss, partial_losses
 
 
 def get_mtl_losses(targets, masks, task_outputs, task_sizes, one_obj_layer, counts, is_training=False,

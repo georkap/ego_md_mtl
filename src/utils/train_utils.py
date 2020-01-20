@@ -12,11 +12,13 @@ Functions that are used in training the network.
 """
 import time
 import torch
+import copy
 
-from src.utils.calc_utils import AverageMeter, accuracy, init_training_metrics, init_test_metrics, init_map_metrics, update_per_dataset_metrics, charades_map
+from src.utils.calc_utils import AverageMeter, accuracy, init_training_metrics, init_test_metrics,\
+    update_per_dataset_metrics, charades_map
 from src.utils.learning_rates import CyclicLR
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from src.losses.mtl_losses import get_mtl_losses, multiobjective_gradient_optimization
+from src.losses.mtl_losses import get_mtl_losses, multiobjective_gradient_optimization, get_mtl_losses_comb
 from src.utils.eval_utils import *
 
 def mixup_data(x, y, alpha=1.0, use_cuda=True):
@@ -99,6 +101,130 @@ def val_outputs_per_dataset(network_output, targets, tasks_per_dataset, batch_id
             outputs_per_dataset[dataset_id].append(tmp_outputs)
 
     return outputs_per_dataset, targets_per_dataset
+
+def calc_losses_per_dataset_comb(network_outputs, targets, masks, tasks_per_dataset, comb_tasks_per_dataset,
+                                 batch_ids_per_dataset, is_training, base_gpu, metrics):
+
+    (outputs, coords, heatmaps, probabilities, objects, obj_cat) = network_outputs
+
+    # split task outputs
+    task_outputs = list()
+    task_outputs.append(outputs[0][batch_ids_per_dataset[0]])  # actions epic
+    task_outputs.append(outputs[1])  # verbs combined
+    task_outputs.append(outputs[2])  # nouns combined
+    task_outputs.append(outputs[3][batch_ids_per_dataset[1]])  # actions gtea
+
+    # split task targets
+    masks = masks.cuda(base_gpu)
+    targets = targets.cuda(base_gpu)
+    task_targets = list()
+    tmp_targets_0 = targets[batch_ids_per_dataset[0]].transpose(0, 1)
+    tmp_targets_1 = targets[batch_ids_per_dataset[1]].transpose(0, 1)
+    task_targets.append(tmp_targets_0[0])
+    task_targets.append(tmp_targets_0[1])
+    task_targets.append(tmp_targets_0[2])
+    task_targets.append(tmp_targets_1[0])
+    task_targets.append(tmp_targets_1[1])
+    task_targets.append(tmp_targets_1[2])
+
+    full_loss, partial_losses = get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_per_dataset,
+                                                    comb_tasks_per_dataset, batch_ids_per_dataset, base_gpu)
+
+    cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses = partial_losses
+
+    # update metrics
+    full_losses, dataset_metrics = metrics
+
+    dataset_batch_size_0 = len(batch_ids_per_dataset[0])
+    dataset_batch_size_1 = len(batch_ids_per_dataset[1])
+    batch_size = dataset_batch_size_0 + dataset_batch_size_1
+
+    if dataset_batch_size_0 > 0:
+        t1, t5 = accuracy(task_outputs[0].detach().cpu(), task_targets[0].detach().cpu().long(), topk=(1, 5))
+        dataset_metrics[0]['top1_meters'][0].update(t1.item(), dataset_batch_size_0)
+        dataset_metrics[0]['top5_meters'][0].update(t5.item(), dataset_batch_size_0)
+        t1, t5 = accuracy(task_outputs[1][batch_ids_per_dataset[0]].detach().cpu(), task_targets[1].detach().cpu().long(), topk=(1, 5))
+        dataset_metrics[0]['top1_meters'][1].update(t1.item(), dataset_batch_size_0)
+        dataset_metrics[0]['top5_meters'][1].update(t5.item(), dataset_batch_size_0)
+        t1, t5 = accuracy(task_outputs[2][batch_ids_per_dataset[0]].detach().cpu(), task_targets[2].detach().cpu().long(), topk=(1, 5))
+        dataset_metrics[0]['top1_meters'][2].update(t1.item(), dataset_batch_size_0)
+        dataset_metrics[0]['top5_meters'][2].update(t5.item(), dataset_batch_size_0)
+    if dataset_batch_size_1 > 0:
+        t1, t5 = accuracy(task_outputs[3].detach().cpu(), task_targets[3].detach().cpu().long(), topk=(1, 5))
+        dataset_metrics[1]['top1_meters'][0].update(t1.item(), dataset_batch_size_1)
+        dataset_metrics[1]['top5_meters'][0].update(t5.item(), dataset_batch_size_1)
+        t1, t5 = accuracy(task_outputs[1][batch_ids_per_dataset[1]].detach().cpu(), task_targets[4].detach().cpu().long(), topk=(1, 5))
+        dataset_metrics[1]['top1_meters'][1].update(t1.item(), dataset_batch_size_1)
+        dataset_metrics[1]['top5_meters'][1].update(t5.item(), dataset_batch_size_1)
+        t1, t5 = accuracy(task_outputs[2][batch_ids_per_dataset[1]].detach().cpu(), task_targets[5].detach().cpu().long(), topk=(1, 5))
+        dataset_metrics[1]['top1_meters'][2].update(t1.item(), dataset_batch_size_1)
+        dataset_metrics[1]['top5_meters'][2].update(t5.item(), dataset_batch_size_1)
+
+    if is_training:
+        full_losses.update(full_loss.item(), batch_size)
+        if dataset_batch_size_0 > 0:
+            dataset_metrics[0]['cls_loss_meters'][0].update(cls_losses[0].item(), dataset_batch_size_0)
+            dataset_metrics[0]['cls_loss_meters'][1].update(cls_losses[1].item(), batch_size)
+            dataset_metrics[0]['cls_loss_meters'][2].update(cls_losses[2].item(), batch_size)
+            for i, hl in enumerate(hand_coord_losses):
+                dataset_metrics[0]['losses_hands'][i].update(hl.item(), batch_size)
+        if dataset_batch_size_1 > 0:
+            dataset_metrics[1]['cls_loss_meters'][0].update(cls_losses[3].item(), dataset_batch_size_1)
+            for i, gl in enumerate(gaze_coord_losses):
+                dataset_metrics[1]['losses_gaze'][i].update(gl.item(), dataset_batch_size_1)
+
+    return full_loss
+
+def make_to_print_comb(to_print, log_file, tasks_per_dataset, metrics, is_training):
+    full_losses, dataset_metrics = metrics
+    # make_to_print
+    if is_training:
+        to_print += '[F_Loss {:.4f}[avg:{:.4f}]\n\t'.format(full_losses.val, full_losses.avg)
+
+    # dataset_id = 0
+    num_cls_tasks = tasks_per_dataset[0]['num_cls_tasks']
+    top1_meters = dataset_metrics[0]['top1_meters']
+    top5_meters = dataset_metrics[0]['top5_meters']
+    if is_training:
+        num_h_tasks = tasks_per_dataset[0]['num_h_tasks']
+        losses_hands = dataset_metrics[0]['losses_hands']
+        cls_loss_meters = dataset_metrics[0]['cls_loss_meters']
+        for ind in range(num_cls_tasks):
+            to_print += 'T{}::loss {:.4f}[avg:{:.4f}], '.format(ind, cls_loss_meters[ind].val, cls_loss_meters[ind].avg)
+        for ind in range(num_h_tasks):
+            to_print += '[l_hcoo_{} {:.4f}[avg:{:.4f}], '.format(ind, losses_hands[ind].val, losses_hands[ind].avg)
+        for ind in range(num_cls_tasks):
+            if ind == 0:
+                to_print += '\n\t\t'
+            to_print += 'T{}::Top1 {:.3f}[avg:{:.3f}],Top5 {:.3f}[avg:{:.3f}],'.format(
+                ind, top1_meters[ind].val, top1_meters[ind].avg, top5_meters[ind].val, top5_meters[ind].avg)
+        to_print += "\n\t"
+    else: # not training
+        to_print += '\n\t'
+        to_print = append_to_print_cls_results(to_print, num_cls_tasks, top1_meters, top5_meters)
+
+    # dataset_id = 1
+    num_cls_tasks = tasks_per_dataset[1]['num_cls_tasks']
+    top1_meters = dataset_metrics[1]['top1_meters']
+    top5_meters = dataset_metrics[1]['top5_meters']
+    if is_training:
+        num_g_tasks = tasks_per_dataset[1]['num_g_tasks']
+        losses_gaze = dataset_metrics[1]['losses_gaze']
+        cls_loss_meters = dataset_metrics[1]['cls_loss_meters']
+        for ind in range(num_cls_tasks):
+            to_print += 'T{}::loss {:.4f}[avg:{:.4f}], '.format(ind, cls_loss_meters[ind].val, cls_loss_meters[ind].avg)
+        for ind in range(num_g_tasks):
+            to_print += '[l_gcoo_{} {:.4f}[avg:{:.4f}], '.format(ind, losses_gaze[ind].val, losses_gaze[ind].avg)
+        for ind in range(num_cls_tasks):
+            if ind == 0:
+                to_print += '\n\t\t'
+            to_print += 'T{}::Top1 {:.3f}[avg:{:.3f}],Top5 {:.3f}[avg:{:.3f}],'.format(
+                ind, top1_meters[ind].val, top1_meters[ind].avg, top5_meters[ind].val, top5_meters[ind].avg)
+    else: # not training
+        to_print += '\n\t'
+        to_print = append_to_print_cls_results(to_print, num_cls_tasks, top1_meters, top5_meters)
+
+    print_and_save(to_print, log_file)
 
 def calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, batch_ids_per_dataset, one_obj_layer,
                             is_training, base_gpu, dataset_metrics, multioutput_loss=0, t_attn=False):
@@ -299,8 +425,52 @@ def make_final_test_print(tasks_per_dataset, dataset_metrics, dataset_type, log_
         print_and_save(final_print, log_file)
 
 
+def train_mfnet_mo_comb(model, optimizer, train_iterator, tasks_per_dataset, cur_epoch, log_file, gpus, **kwargs):
+    # reduce the tasks for egtea
+    comb_tasks_per_dataset = copy.deepcopy(tasks_per_dataset)
+    comb_tasks_per_dataset[1]['num_cls_tasks'] -= 2
+    comb_tasks_per_dataset[1]['num_h_tasks'] -= 1
+    batch_time, full_losses_metric, dataset_metrics = init_training_metrics(tasks_per_dataset, 0, False)
+
+    lr_scheduler = kwargs.get('lr_scheduler')
+
+    optimizer.zero_grad()
+    model.train()
+    is_training = True
+    if not isinstance(lr_scheduler, CyclicLR) and not isinstance(lr_scheduler, ReduceLROnPlateau):
+        lr_scheduler.step()
+
+    print_and_save('*********', log_file)
+    print_and_save('Beginning of epoch: {}'.format(cur_epoch), log_file)
+    t0 = time.time()
+
+    for batch_idx, data in enumerate(train_iterator):
+        if isinstance(lr_scheduler, CyclicLR):
+            lr_scheduler.step()
+
+        inputs, targets, masks, dataset_ids, batch_ids_per_dataset = init_inputs_batch(data, comb_tasks_per_dataset,
+                                                                                       False, gpus[0])
+        network_output = model(inputs)
+
+        full_loss = calc_losses_per_dataset_comb(network_output, targets, masks, tasks_per_dataset,
+                                                 comb_tasks_per_dataset, batch_ids_per_dataset, is_training, gpus[0],
+                                                 (full_losses_metric, dataset_metrics))
+
+        full_loss.backward()
+        optimizer.step()
+        batch_time.update(time.time() - t0)
+        t0 = time.time()
+        # print results
+        to_print = '[Epoch:{}, Batch {}/{} in {:.3f} s, LR {:.6f}]'.format(
+            cur_epoch, batch_idx, len(train_iterator), batch_time.val, lr_scheduler.get_lr()[0])
+        make_to_print_comb(to_print, log_file, tasks_per_dataset, (full_losses_metric, dataset_metrics), is_training)
+
+    print_and_save("Epoch train time: {}".format(batch_time.sum), log_file)
+
+
 def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoch, log_file, gpus, lr_scheduler=None,
-                   moo=False, use_flow=False, one_obj_layer=False, grad_acc_batches=None, multioutput_loss=0, t_attn=False):
+                   moo=False, use_flow=False, one_obj_layer=False, grad_acc_batches=None, multioutput_loss=0,
+                   t_attn=False):
     batch_time, full_losses_metric, dataset_metrics = init_training_metrics(tasks_per_dataset, multioutput_loss, t_attn)
 
     optimizer.zero_grad()
@@ -364,6 +534,37 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
                           dataset_ids, full_loss, multioutput_loss, t_attn)
 
     print_and_save("Epoch train time: {}".format(batch_time.sum), log_file)
+
+def test_mfnet_mo_comb(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_type, log_file, gpus, **kwargs):
+    is_training = False
+    # reduce the tasks for egtea
+    comb_tasks_per_dataset = copy.deepcopy(tasks_per_dataset)
+    comb_tasks_per_dataset[1]['num_cls_tasks'] -= 2
+    comb_tasks_per_dataset[1]['num_h_tasks'] -= 1
+    dataset_metrics = init_test_metrics(tasks_per_dataset)
+
+    with torch.no_grad():
+        model.eval()
+        print_and_save('Evaluating after epoch: {} on {} set'.format(cur_epoch, dataset_type), log_file)
+        for batch_idx, data in enumerate(test_iterator):
+            inputs, targets, masks, dataset_ids, batch_ids_per_dataset = init_inputs_batch(data, comb_tasks_per_dataset,
+                                                                                           False, gpus[0])
+
+            network_output = model(inputs)
+            _ = calc_losses_per_dataset_comb(network_output, targets, masks, tasks_per_dataset, comb_tasks_per_dataset,
+                                             batch_ids_per_dataset, is_training, gpus[0], (None, dataset_metrics))
+            # print results
+            to_print = '[Epoch:{}, Batch {}/{}]'.format(cur_epoch, batch_idx, len(test_iterator))
+            make_to_print_comb(to_print, log_file, tasks_per_dataset, (None, dataset_metrics), is_training)
+        make_final_test_print(tasks_per_dataset, dataset_metrics, dataset_type, log_file)
+
+        task_top1s = list()
+        for dataset_id in range(len(tasks_per_dataset)):
+            top1_meters = dataset_metrics[dataset_id]['top1_meters']
+            for tasktop1 in top1_meters:
+                task_top1s.append(tasktop1.avg)
+
+    return task_top1s
 
 def test_mfnet_mo(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_type, log_file, gpus, use_flow=False,
                   one_obj_layer=False, multioutput_loss=0, t_attn=False):

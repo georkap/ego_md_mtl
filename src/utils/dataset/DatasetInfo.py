@@ -1,10 +1,11 @@
 import numpy as np
 import pandas
+from src.constants import gtea_mapped_nouns, gtea_mapped_verbs
 
 class DatasetInfo(object):
     def __init__(self, dataset_id, dataset_name, data_line, img_tmpl, tasks_for_dataset, cls_tasks, max_num_classes,
                  gaze_list_prefix, hand_list_prefix, object_list_prefix, object_categories_path, video_list,
-                 sub_with_flow):
+                 sub_with_flow, map_to_epic=False):
         self.dataset_id = dataset_id
         self.dataset_name = dataset_name
         self.data_line = data_line
@@ -26,6 +27,13 @@ class DatasetInfo(object):
                 self.num_classes.append(value)
                 if value != max_num_classes[task_long]:
                     self.mappings.append(make_class_mapping_generic(video_list, task_long))
+                elif dataset_name == 'egtea' and map_to_epic:
+                    if task_short == 'V':
+                        self.mappings.append(gtea_mapped_verbs)
+                    elif task_short == 'N':
+                        self.mappings.append(gtea_mapped_nouns)
+                    else:
+                        self.mappings.append(None)
                 else:
                     self.mappings.append(None)
             else:
@@ -47,3 +55,4 @@ def make_class_mapping_generic(samples_list, attribute):
     for i, c in enumerate(classes):
         mapping_dict[c] = i
     return mapping_dict
+

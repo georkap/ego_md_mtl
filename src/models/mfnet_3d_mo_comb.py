@@ -17,13 +17,13 @@ from src.models.layers import CoordRegressionLayer, MultitaskClassifiers, Object
 from src.utils.initializer import xavier
 from torch.functional import F
 
-class MFNET_3D_MO(nn.Module):
+class MFNET_3D_MO_COMB(nn.Module):
     def __init__(self, num_classes, dropout=None, **kwargs):
-        super(MFNET_3D_MO, self).__init__()
+        super(MFNET_3D_MO_COMB, self).__init__()
         # support for arbitrary number of output layers, but it is the user's job to make sure they make sense
         # (e.g. actions->actions and not actions->verbs,nouns etc.)
-        self.num_classes = num_classes
-        self.num_coords = kwargs.get('num_coords', 0)
+        self.num_classes = num_classes[0:4] # to remove egtea VN tasks
+        self.num_coords = kwargs.get('num_coords', 0) - 2 # to remove one of the hand tasks
         self.num_objects = kwargs.get('num_objects', None)
         self.num_obj_cat = kwargs.get('num_obj_cat', None)
         self.one_object_layer = kwargs.get('one_object_layer', False)
@@ -99,7 +99,7 @@ class MFNET_3D_MO(nn.Module):
         if dropout:
             self.globalpool.add_module('dropout', nn.Dropout(p=dropout))
 
-        self.classifier_list = MultitaskClassifiers(c5_out, num_classes)
+        self.classifier_list = MultitaskClassifiers(c5_out, self.num_classes)
 
         if self.num_objects:
             for ii, no in enumerate(self.num_objects): # if there are more than one object presence layers, e.g. one per dataset
@@ -196,22 +196,22 @@ class MFNET_3D_MO(nn.Module):
 if __name__ == "__main__":
     import torch, time
     # ---------
-    kwargs = {'num_coords': 3, 'num_objects': None, 'num_obj_cat': None, 'one_object_layer': True,
+    kwargs = {'num_coords': 5, 'num_objects': None, 'num_obj_cat': None, 'one_object_layer': True,
               'ensemble_eval': False}
-    net = MFNET_3D_MO(num_classes=[106, 19, 53], dropout=0.5, **kwargs)
-    data = torch.randn(2, 3, 16, 224, 224, requires_grad=True)
+    net = MFNET_3D_MO_COMB(num_classes=[2513, 125, 352, 106, 19, 53], dropout=0.5, **kwargs)
+    data = torch.randn(1, 3, 16, 224, 224, requires_grad=True)
     net.cuda()
     data = data.cuda()
-    net.train()
+    net.eval()
     # loss = torch.tensor([10]).cuda()
     output = net(data)
-    # t0 = time.time()
-    # for i in range(10):
-    #     output = net(data)
-    # t1 = time.time()
-    # print('forward time:', t1 - t0)
+    t0 = time.time()
+    for i in range(10):
+        output = net(data)
+    t1 = time.time()
+    print('forward time:', t1 - t0)
     # h, htail = net.forward_shared_block(data)
     # coords, heatmaps, probabilities = net.forward_coord_layers(htail)
     # output = net.forward_cls_layers(h)
    # torch.save({'state_dict': net.state_dict()}, './tmp.pth')
-    print(len(output))
+   #  print(len(output))

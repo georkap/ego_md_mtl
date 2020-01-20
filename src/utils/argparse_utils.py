@@ -59,6 +59,10 @@ def parse_args_network(parser, net_type):
         parser.add_argument('--one_object_layer', default=False, action='store_true')
         parser.add_argument('--pretrained', default=False, action='store_true')
         parser.add_argument('--pretrained_model_path', type=str, default=r"data/pretrained_models/MFNet3D_Kinetics-400_72.8.pth")
+        parser.add_argument('--map_tasks', default=False, action='store_true',
+                            help='works only to map VNH tasks of EGTEA to EPIC, effectively reducing the classification'
+                                 ' tasks from 6 to 4 and the hand tasks from 2 to 1,'
+                                 ' doesnt work for anything else as it is a very elaborate process to make versatile.')
         parser.add_argument('--tasks', type=str, default='A106',
                             help="e.g. A106V19N53GH for all EGTEA tasks with all their classes. "
                                  "If '+' is in the string it will assume multitask for multiple datasets, the order of"
@@ -197,12 +201,14 @@ def make_log_file_name(output_dir, args):
         log_file = None
     return log_file
 
-def parse_tasks_str(task_str, dataset_names):
+def parse_tasks_str(arguments):
     """ Parser for task string. '+' will split the string and will parse each part for a dataset. It will return a list
      with dictionaries. The length of the list is equal to the number of datasets in the multidataset training scheme.
      Each list entry is a dictionary where the key is the task starting letter and the value is an Int or None. Int
      means the number of classes for the task (i.e. it is a classification task) and None means a coordinate regression
       task which depending on the letter will mean a specific thing."""
+    task_str = arguments.tasks
+    dataset_names = arguments.dataset
     task_str = task_str.split('+')
     tasks_per_dataset = []
     for dataset_tasks, dataset_name in zip(task_str, dataset_names):
