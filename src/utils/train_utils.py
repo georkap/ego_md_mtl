@@ -113,10 +113,12 @@ def calc_losses_per_dataset_comb(network_outputs, targets, masks, tasks_per_data
 
     # split task outputs
     task_outputs = list()
-    task_outputs.append(outputs[0][batch_ids_per_dataset[0]])  # actions epic
+    task_outputs_0 = outputs[0][batch_ids_per_dataset[0]]
+    task_outputs.append(task_outputs_0 if len(task_outputs_0) > 0 else [])  # actions epic
     task_outputs.append(outputs[1])  # verbs combined
     task_outputs.append(outputs[2])  # nouns combined
-    task_outputs.append(outputs[3][batch_ids_per_dataset[1]])  # actions gtea
+    task_outputs_3 = outputs[3][batch_ids_per_dataset[1]]
+    task_outputs.append(task_outputs_3 if len(task_outputs_3) > 0 else [])  # actions gtea
 
     # split task targets
     masks = masks.cuda(base_gpu)
@@ -163,14 +165,14 @@ def calc_losses_per_dataset_comb(network_outputs, targets, masks, tasks_per_data
         full_losses.update(full_loss.item(), batch_size)
         if dataset_batch_size_0 > 0:
             dataset_metrics[0]['cls_loss_meters'][0].update(cls_losses[0].item(), dataset_batch_size_0)
-            dataset_metrics[0]['cls_loss_meters'][1].update(cls_losses[1].item(), batch_size)
-            dataset_metrics[0]['cls_loss_meters'][2].update(cls_losses[2].item(), batch_size)
-            for i, hl in enumerate(hand_coord_losses):
-                dataset_metrics[0]['losses_hands'][i].update(hl.item(), batch_size)
         if dataset_batch_size_1 > 0:
             dataset_metrics[1]['cls_loss_meters'][0].update(cls_losses[3].item(), dataset_batch_size_1)
             for i, gl in enumerate(gaze_coord_losses):
                 dataset_metrics[1]['losses_gaze'][i].update(gl.item(), dataset_batch_size_1)
+        dataset_metrics[0]['cls_loss_meters'][1].update(cls_losses[1].item(), batch_size)
+        dataset_metrics[0]['cls_loss_meters'][2].update(cls_losses[2].item(), batch_size)
+        for i, hl in enumerate(hand_coord_losses):
+            dataset_metrics[0]['losses_hands'][i].update(hl.item(), batch_size)
 
     return full_loss
 

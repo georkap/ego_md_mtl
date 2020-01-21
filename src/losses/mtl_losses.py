@@ -15,9 +15,7 @@ def get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_pe
 
     # epic dataset_id = 0
     # cls targets
-    if not len(tmp_targets_0[0] > 0): # if epic has targets in the batch calculate the classification losses
-        cls_losses.append(0)
-    else:
+    if len(tmp_targets_0[0] > 0): # if epic has targets in the batch calculate the classification losses
         num_cls_tasks = tasks_per_dataset[0]['num_cls_tasks']
         cls_targets = tmp_targets_0[:num_cls_tasks, :].long()
         # cls losses
@@ -50,9 +48,7 @@ def get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_pe
 
     # egtea dataset_id = 1
     # cls targets
-    if not len(tmp_targets_1[0] > 0):  # if gtea has targets in the batch calculate the classification losses
-        cls_losses.append(0)  # just for the 4th task
-    else:
+    if len(tmp_targets_1[0] > 0):  # if gtea has targets in the batch calculate the classification losses
         num_cls_tasks = tasks_per_dataset[1]['num_cls_tasks']
         cls_targets = tmp_targets_1[:num_cls_tasks, :].long()
         # cls losses
