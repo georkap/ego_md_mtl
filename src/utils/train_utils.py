@@ -210,7 +210,7 @@ def make_to_print_comb(to_print, log_file, tasks_per_dataset, metrics, is_traini
         num_g_tasks = tasks_per_dataset[1]['num_g_tasks']
         losses_gaze = dataset_metrics[1]['losses_gaze']
         cls_loss_meters = dataset_metrics[1]['cls_loss_meters']
-        for ind in range(num_cls_tasks):
+        for ind in range(num_cls_tasks[:1]):
             to_print += 'T{}::loss {:.4f}[avg:{:.4f}], '.format(ind, cls_loss_meters[ind].val, cls_loss_meters[ind].avg)
         for ind in range(num_g_tasks):
             to_print += '[l_gcoo_{} {:.4f}[avg:{:.4f}], '.format(ind, losses_gaze[ind].val, losses_gaze[ind].avg)

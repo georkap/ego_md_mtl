@@ -10,12 +10,13 @@ def get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_pe
                         batch_ids_per_dataset, base_gpu, batch_size):
 
     cls_losses = []
+    tmp_targets_0 = targets[batch_ids_per_dataset[0]].transpose(0, 1)
+    tmp_targets_1 = targets[batch_ids_per_dataset[1]].transpose(0, 1)
+
     # epic dataset_id = 0
     # cls targets
-    tmp_targets_0 = targets[batch_ids_per_dataset[0]].transpose(0, 1)
     if not len(tmp_targets_0[0] > 0): # if epic has targets in the batch calculate the classification losses
-        for i in range(3):
-            cls_losses.append(0)
+        cls_losses.append(0)
     else:
         num_cls_tasks = tasks_per_dataset[0]['num_cls_tasks']
         cls_targets = tmp_targets_0[:num_cls_tasks, :].long()
@@ -24,17 +25,32 @@ def get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_pe
         loss_for_task = F.cross_entropy(tmp_outputs, cls_targets[0])
         cls_losses.append(loss_for_task)
 
-        tmp_outputs = task_outputs[1][batch_ids_per_dataset[0]]  # verbs
-        loss_for_task = F.cross_entropy(tmp_outputs, cls_targets[1], reduction='sum')
-        cls_losses.append(loss_for_task)
+    # combined verbs and nouns
+    # verbs
+    # weight = torch.zeros(125, dtype=torch.float, device=base_gpu)
+    # weight[list(gtea_mapped_verbs.values())] = 1
+    combined_cls1_targets = torch.zeros(batch_size, dtype=torch.long, device=base_gpu)
+    combined_cls1_targets[batch_ids_per_dataset[0]] = tmp_targets_0[1, :].long()
+    combined_cls1_targets[batch_ids_per_dataset[1]] = tmp_targets_1[1, :].long()
+    # tmp_outputs = task_outputs[1][batch_ids_per_dataset[0]]
+    loss_for_task = F.cross_entropy(task_outputs[1], combined_cls1_targets, reduction='mean')
+    # loss_for_task[batch_ids_per_dataset[1]] *= weight
+    cls_losses.append(loss_for_task)
 
-        tmp_outputs = task_outputs[2][batch_ids_per_dataset[0]]  # nouns
-        loss_for_task = F.cross_entropy(tmp_outputs, cls_targets[2], reduction='sum')
-        cls_losses.append(loss_for_task)
+    # nouns
+    # weight = torch.zeros(352, dtype=torch.float, device=base_gpu)
+    # weight[list(gtea_mapped_nouns.values())] = 1
+    combined_cls2_targets = torch.zeros(batch_size, dtype=torch.long, device=base_gpu)
+    combined_cls2_targets[batch_ids_per_dataset[0]] = tmp_targets_0[2, :].long()
+    combined_cls2_targets[batch_ids_per_dataset[1]] = tmp_targets_1[2, :].long()
+    # tmp_outputs = task_outputs[2][batch_ids_per_dataset[0]]
+    loss_for_task = F.cross_entropy(task_outputs[2], combined_cls2_targets, reduction='mean')
+    # loss_for_task[batch_ids_per_dataset[1]] *= weight
+    cls_losses.append(loss_for_task)
+
     # egtea dataset_id = 1
     # cls targets
-    tmp_targets_1 = targets[batch_ids_per_dataset[1]].transpose(0, 1)
-    if not len(tmp_targets_1[0] > 0): # if gtea has targets in the batch calculate the classification losses
+    if not len(tmp_targets_1[0] > 0):  # if gtea has targets in the batch calculate the classification losses
         cls_losses.append(0)  # just for the 4th task
     else:
         num_cls_tasks = tasks_per_dataset[1]['num_cls_tasks']
@@ -43,21 +59,6 @@ def get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_pe
         tmp_outputs = task_outputs[3]  # actions
         loss_for_task = F.cross_entropy(tmp_outputs, cls_targets[0])
         cls_losses.append(loss_for_task)
-
-        tmp_outputs = task_outputs[1][batch_ids_per_dataset[1]]  # verbs
-        weight = torch.zeros(125, dtype=torch.float, device=base_gpu)
-        weight[list(gtea_mapped_verbs.values())] = 1
-        loss_for_task = F.cross_entropy(tmp_outputs, cls_targets[1], weight=weight, reduction='sum')
-        cls_losses[1] += loss_for_task
-
-        tmp_outputs = task_outputs[2][batch_ids_per_dataset[1]]
-        weight = torch.zeros(352, dtype=torch.float, device=base_gpu)
-        weight[list(gtea_mapped_nouns.values())] = 1
-        loss_for_task = F.cross_entropy(tmp_outputs, cls_targets[2], weight=weight, reduction='sum')
-        cls_losses[2] += loss_for_task
-
-    cls_losses[1] /= batch_size
-    cls_losses[2] /= batch_size
 
     loss = sum(cls_losses) # sum the classification losses for the 4 combined classification tasks
 
