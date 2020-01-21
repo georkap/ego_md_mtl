@@ -12,16 +12,51 @@ def get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_pe
     cls_losses = []
     tmp_targets_0 = targets[batch_ids_per_dataset[0]].transpose(0, 1)
     tmp_targets_1 = targets[batch_ids_per_dataset[1]].transpose(0, 1)
+    dataset_batch_size_0 = len(batch_ids_per_dataset[0])
+    dataset_batch_size_1 = len(batch_ids_per_dataset[1])
+    weight_verbs = torch.zeros(125, dtype=torch.float, device=base_gpu)
+    weight_verbs[list(gtea_mapped_verbs.values())] = 1
+    weight_nouns = torch.zeros(352, dtype=torch.float, device=base_gpu)
+    weight_nouns[list(gtea_mapped_nouns.values())] = 1
 
     # epic dataset_id = 0
     # cls targets
-    if len(tmp_targets_0[0] > 0): # if epic has targets in the batch calculate the classification losses
-        num_cls_tasks = tasks_per_dataset[0]['num_cls_tasks']
-        cls_targets = tmp_targets_0[:num_cls_tasks, :].long()
-        # cls losses
-        tmp_outputs = task_outputs[0]  # actions
-        loss_for_task = F.cross_entropy(tmp_outputs, cls_targets[0])
-        cls_losses.append(loss_for_task)
+    # loss_for_task_1, loss_for_task_2 = 0, 0
+    if dataset_batch_size_0 > 0: # if epic has targets in the batch calculate the epic action classification losses
+        # loss_for_task_actions_epic = F.cross_entropy(task_outputs[0], tmp_targets_0[0, :].long(), reduction='sum')/batch_size
+        loss_for_task_actions_epic = F.cross_entropy(task_outputs[0], tmp_targets_0[0, :].long())
+        # cls_losses.append(loss_for_task_actions_epic)
+        # loss_for_task_0_1 = F.cross_entropy(task_outputs[1][batch_ids_per_dataset[0]], tmp_targets_0[1, :].long(),
+        #                                     reduction='sum')
+        # loss_for_task_0_2 = F.cross_entropy(task_outputs[2][batch_ids_per_dataset[0]], tmp_targets_0[2, :].long(),
+        #                                     reduction='sum')
+        #
+        # loss_for_task_1 += loss_for_task_0_1
+        # loss_for_task_2 += loss_for_task_0_2
+    if dataset_batch_size_1 > 0:  # if gtea has targets in the batch calculate the gtea action classification losses
+        # loss_for_task_actions_gtea = F.cross_entropy(task_outputs[3], tmp_targets_1[0, :].long(), reduction='sum')/batch_size
+        loss_for_task_actions_gtea = F.cross_entropy(task_outputs[3], tmp_targets_1[0, :].long())
+        # cls_losses.append(loss_for_task_actions_gtea)
+
+        # logits_1 = F.log_softmax(task_outputs[1][batch_ids_per_dataset[1]]*weight_verbs, dim=1)
+        # loss_for_task_1_1 = F.nll_loss(logits_1, tmp_targets_1[1, :].long(), reduction='sum')
+        # logits_2 = F.log_softmax(task_outputs[2][batch_ids_per_dataset[1]]*weight_nouns, dim=1)
+        # loss_for_task_1_2 = F.nll_loss(logits_2, tmp_targets_1[2, :].long(), reduction='sum')
+        # loss_for_task_1_1 = F.cross_entropy(task_outputs[1][batch_ids_per_dataset[1]], tmp_targets_1[1, :].long(),
+        #                                     reduction='sum')
+        # loss_for_task_1_2 = F.cross_entropy(task_outputs[2][batch_ids_per_dataset[1]], tmp_targets_1[2, :].long(),
+        #                                     reduction='sum')
+        # loss_for_task_1 += loss_for_task_1_1
+        # loss_for_task_2 += loss_for_task_1_2
+
+    # loss_for_task_1 /= batch_size
+    # loss_for_task_2 /= batch_size
+
+    if dataset_batch_size_0 > 0:
+        cls_losses.append(loss_for_task_actions_epic)
+
+    # cls_losses.append(loss_for_task_1)
+    # cls_losses.append(loss_for_task_2)
 
     # combined verbs and nouns
     # verbs
@@ -46,15 +81,8 @@ def get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_pe
     # loss_for_task[batch_ids_per_dataset[1]] *= weight
     cls_losses.append(loss_for_task)
 
-    # egtea dataset_id = 1
-    # cls targets
-    if len(tmp_targets_1[0] > 0):  # if gtea has targets in the batch calculate the classification losses
-        num_cls_tasks = tasks_per_dataset[1]['num_cls_tasks']
-        cls_targets = tmp_targets_1[:num_cls_tasks, :].long()
-        # cls losses
-        tmp_outputs = task_outputs[3]  # actions
-        loss_for_task = F.cross_entropy(tmp_outputs, cls_targets[0])
-        cls_losses.append(loss_for_task)
+    if dataset_batch_size_1 > 0:
+        cls_losses.append(loss_for_task_actions_gtea)
 
     loss = sum(cls_losses) # sum the classification losses for the 4 combined classification tasks
 

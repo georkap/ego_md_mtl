@@ -113,85 +113,46 @@ class MFNET_3D_MO_COMB(nn.Module):
         # Initialization
         xavier(net=self)
 
-    def forward(self, x, upto=None):
-        if upto is None:
-            assert x.shape[2] == 16
-
-            h = self.conv1(x)   # x224 -> x112
-            # print(h.shape)
-            h = self.maxpool(h)  # x112 ->  x56
-            # print(h.shape)
-            h = self.conv2(h)  # x56 ->  x56
-            # print(h.shape)
-            h = self.conv3(h)  # x56 ->  x28
-            # print(h.shape)
-            h = self.conv4(h)  # x28 ->  x14
-            # print(h.shape)
-            h = self.conv5(h)  # x14 ->   x7
-            # print(h.shape)
-
-            h = self.tail(h)
-            coords, heatmaps, probabilities = None, None, None
-            if self.num_coords > 0:
-                coords, heatmaps, probabilities = self.coord_layers(h)
-
-            if not self.training and self.ensemble_eval: # not fully supported yet
-                h_ens = F.avg_pool3d(h, (1, self.s_dim_in//32, self.s_dim_in//32), (1, 1, 1))
-                h_ens = h_ens.view(h_ens.shape[0], h_ens.shape[1], -1)
-                h_ens = [self.classifier_list(h_ens[:, :, ii]) for ii in range(h_ens.shape[2])]
-
-            h = self.globalpool(h)
-            h = h.view(h.shape[0], -1)
-            h_out = self.classifier_list(h)
-
-            objects = None
-            if self.num_objects:
-                objects = [self.__getattr__('object_presence_layer_{}'.format(ii))(h) for ii in range(len(self.num_objects))]
-            cat_obj = None
-            if self.num_obj_cat:
-                cat_obj = [self.__getattr__('objcat_presence_layer_{}'.format(ii))(h) for ii in range(len(self.num_obj_cat))]
-            if not self.training and self.ensemble_eval:
-                h_out = [h_out, h_ens]
-
-            return h_out, coords, heatmaps, probabilities, objects, cat_obj
-
-
-        elif upto == 'shared':
-            return self.forward_shared_block(x)
-        elif upto == 'cls':
-            return self.forward_cls_layers(x)
-        elif upto == 'coord':
-            return self.forward_coord_layers(x)
-    
-    def forward_shared_block(self, x):
+    def forward(self, x):
         assert x.shape[2] == 16
 
         h = self.conv1(x)   # x224 -> x112
+        # print(h.shape)
         h = self.maxpool(h)  # x112 ->  x56
-
+        # print(h.shape)
         h = self.conv2(h)  # x56 ->  x56
+        # print(h.shape)
         h = self.conv3(h)  # x56 ->  x28
+        # print(h.shape)
         h = self.conv4(h)  # x28 ->  x14
+        # print(h.shape)
         h = self.conv5(h)  # x14 ->   x7
+        # print(h.shape)
 
-        h_tail = self.tail(h)
-
-        h = self.globalpool(h_tail)
-
-        h = h.view(h.shape[0], -1)
-
-        return h, h_tail
-
-    def forward_coord_layers(self, h_tail):
+        h = self.tail(h)
         coords, heatmaps, probabilities = None, None, None
         if self.num_coords > 0:
-            coords, heatmaps, probabilities = self.coord_layers(h_tail)
-        return coords, heatmaps, probabilities
+            coords, heatmaps, probabilities = self.coord_layers(h)
 
-    def forward_cls_layers(self, h):
+        if not self.training and self.ensemble_eval: # not fully supported yet
+            h_ens = F.avg_pool3d(h, (1, self.s_dim_in//32, self.s_dim_in//32), (1, 1, 1))
+            h_ens = h_ens.view(h_ens.shape[0], h_ens.shape[1], -1)
+            h_ens = [self.classifier_list(h_ens[:, :, ii]) for ii in range(h_ens.shape[2])]
+
+        h = self.globalpool(h)
+        h = h.view(h.shape[0], -1)
         h_out = self.classifier_list(h)
-        return h_out
 
+        objects = None
+        if self.num_objects:
+            objects = [self.__getattr__('object_presence_layer_{}'.format(ii))(h) for ii in range(len(self.num_objects))]
+        cat_obj = None
+        if self.num_obj_cat:
+            cat_obj = [self.__getattr__('objcat_presence_layer_{}'.format(ii))(h) for ii in range(len(self.num_obj_cat))]
+        if not self.training and self.ensemble_eval:
+            h_out = [h_out, h_ens]
+
+        return h_out, coords, heatmaps, probabilities, objects, cat_obj
 
 if __name__ == "__main__":
     import torch, time

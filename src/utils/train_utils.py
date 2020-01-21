@@ -166,11 +166,15 @@ def calc_losses_per_dataset_comb(network_outputs, targets, masks, tasks_per_data
         if dataset_batch_size_0 > 0:
             dataset_metrics[0]['cls_loss_meters'][0].update(cls_losses[0].item(), dataset_batch_size_0)
         if dataset_batch_size_1 > 0:
-            dataset_metrics[1]['cls_loss_meters'][0].update(cls_losses[3].item(), dataset_batch_size_1)
+            dataset_metrics[1]['cls_loss_meters'][0].update(cls_losses[-1].item(), dataset_batch_size_1)
             for i, gl in enumerate(gaze_coord_losses):
                 dataset_metrics[1]['losses_gaze'][i].update(gl.item(), dataset_batch_size_1)
-        dataset_metrics[0]['cls_loss_meters'][1].update(cls_losses[1].item(), batch_size)
-        dataset_metrics[0]['cls_loss_meters'][2].update(cls_losses[2].item(), batch_size)
+        if dataset_batch_size_0 > 0:
+            dataset_metrics[0]['cls_loss_meters'][1].update(cls_losses[1].item(), batch_size)
+            dataset_metrics[0]['cls_loss_meters'][2].update(cls_losses[2].item(), batch_size)
+        else:
+            dataset_metrics[0]['cls_loss_meters'][1].update(cls_losses[0].item(), batch_size)
+            dataset_metrics[0]['cls_loss_meters'][2].update(cls_losses[1].item(), batch_size)
         for i, hl in enumerate(hand_coord_losses):
             dataset_metrics[0]['losses_hands'][i].update(hl.item(), batch_size)
 
@@ -450,6 +454,8 @@ def train_mfnet_mo_comb(model, optimizer, train_iterator, tasks_per_dataset, cur
 
         inputs, targets, masks, dataset_ids, batch_ids_per_dataset = init_inputs_batch(data, comb_tasks_per_dataset,
                                                                                        False, gpus[0])
+
+        optimizer.zero_grad()
         network_output = model(inputs)
 
         full_loss = calc_losses_per_dataset_comb(network_output, targets, masks, tasks_per_dataset,
