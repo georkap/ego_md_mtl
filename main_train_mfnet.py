@@ -35,7 +35,7 @@ from src.constants import *
 
 def main():
     args, model_name = parse_args('mfnet', val=False)
-    tasks_per_dataset = parse_tasks_str(args)
+    tasks_per_dataset = parse_tasks_str(args.tasks, args.dataset, args.interpolate_coordinates)
     objectives_text, objectives, task_sizes = parse_tasks_per_dataset(tasks_per_dataset)
     num_classes, num_coords, num_objects, num_obj_cat = task_sizes
     output_dir, log_file = init_folders(args.base_output_dir, model_name, args.resume, args.logging)
@@ -79,6 +79,7 @@ def main():
     kwargs["num_objects"] = num_objects
     kwargs["num_obj_cat"] = num_obj_cat
     kwargs["one_object_layer"] = args.one_object_layer
+    kwargs["interpolate_coordinates"] = args.interpolate_coordinates
     if args.long:
         kwargs["k_sec"] = {2: 3, 3: 4, 4: 11, 5: 3}
     model_ft = mfnet_3d(num_classes, dropout=args.dropout, **kwargs)
@@ -130,7 +131,8 @@ def main():
                                           object_categories=args.object_cats[:],
                                           use_flow=args.flow, flow_transforms=train_transforms_flow,
                                           only_flow=args.only_flow,
-                                          map_to_epic=args.map_tasks)
+                                          map_to_epic=args.map_tasks,
+                                          interpolate_coords=args.interpolate_coordinates)
     train_iterator = torch.utils.data.DataLoader(train_loader, batch_size=args.batch_size, shuffle=True,
                                                  num_workers=args.num_workers, pin_memory=True)
 
@@ -147,7 +149,8 @@ def main():
                                          object_categories=args.object_cats[:],
                                          use_flow=args.flow, flow_transforms=test_transforms_flow,
                                          only_flow=args.only_flow,
-                                         map_to_epic=args.map_tasks)
+                                         map_to_epic=args.map_tasks,
+                                         interpolate_coords=args.interpolate_coordinates)
     test_iterator = torch.utils.data.DataLoader(test_loader, batch_size=args.batch_size, shuffle=False,
                                                 num_workers=args.num_workers, pin_memory=True)
 

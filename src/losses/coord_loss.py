@@ -2,9 +2,10 @@ import torch
 import dsntnn
 
 
-def gaze_loss(targets, masks, targets_start_from, masks_start_from, coords, heatmaps, probabilities, slice_ind):
-    gaze_targets = targets[targets_start_from:targets_start_from + 16, :].transpose(1, 0).reshape(-1, 8, 1, 2)
-    gaze_masks = masks[:, masks_start_from:masks_start_from+8].squeeze()
+def gaze_loss(targets, masks, targets_start_from, masks_start_from, coords, heatmaps, probabilities, slice_ind,
+              interpolate_coordinates):
+    gaze_targets = targets[targets_start_from:targets_start_from + 16*interpolate_coordinates, :].transpose(1, 0).reshape(-1, 8*interpolate_coordinates, 1, 2)
+    gaze_masks = masks[:, masks_start_from:masks_start_from+8*interpolate_coordinates].squeeze()
     gaze_coords = coords[:, :, slice_ind, :]
     gaze_coords.unsqueeze_(2)
     gaze_heatmaps = heatmaps[:, :, slice_ind, :]
@@ -13,9 +14,9 @@ def gaze_loss(targets, masks, targets_start_from, masks_start_from, coords, heat
     return gaze_coord_loss
 
 
-def hand_loss(targets, masks, targets_start_from, masks_start_from, coords, heatmaps, probabilities, slice_from):
-    hand_targets = targets[targets_start_from:targets_start_from + 32, :].transpose(1, 0).reshape(-1, 8, 2, 2)
-    hand_masks = masks[:, masks_start_from:masks_start_from+16].reshape(-1, 2, 8).transpose(1, 2).squeeze()
+def hand_loss(targets, masks, targets_start_from, masks_start_from, coords, heatmaps, probabilities, slice_from, interpolate_coordinates):
+    hand_targets = targets[targets_start_from:targets_start_from + 32*interpolate_coordinates, :].transpose(1, 0).reshape(-1, 8*interpolate_coordinates, 2, 2)
+    hand_masks = masks[:, masks_start_from:masks_start_from+16*interpolate_coordinates].reshape(-1, 2, 8*interpolate_coordinates).transpose(1, 2).squeeze()
     # hand_masks = masks[:, masks_start_from:masks_start_from+16].reshape(-1, 8, 2).squeeze()
     # for hands slice the last two elements, first is left, second is right hand
     hand_coords = coords[:, :, slice_from:slice_from + 2, :]

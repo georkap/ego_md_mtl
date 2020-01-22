@@ -7,7 +7,7 @@ from src.constants import gtea_mapped_verbs, gtea_mapped_nouns
 
 
 def get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_per_dataset, comb_tasks_per_dataset,
-                        batch_ids_per_dataset, base_gpu, batch_size):
+                        batch_ids_per_dataset, base_gpu, batch_size, interpolate_coordinates):
 
     cls_losses = []
     tmp_targets_0 = targets[batch_ids_per_dataset[0]].transpose(0, 1)
@@ -95,7 +95,8 @@ def get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_pe
         coords_gaze = coords[batch_ids_per_dataset[1]]
         heatmaps_gaze = heatmaps[batch_ids_per_dataset[1]]
         gaze_coord_loss = gaze_loss(tmp_targets_1.transpose(0, 1), tmp_masks, targets_start_from=3, masks_start_from=0,
-                                    coords=coords_gaze, heatmaps=heatmaps_gaze, probabilities=None, slice_ind=0)
+                                    coords=coords_gaze, heatmaps=heatmaps_gaze, probabilities=None, slice_ind=0,
+                                    interpolate_coordinates=interpolate_coordinates)
         loss = loss + gaze_coord_loss
         gaze_coord_losses.append(gaze_coord_loss)
     else:
@@ -107,13 +108,14 @@ def get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_pe
     # to do this I need to synthesize the batch of combined targets
     # targets = targets.transpose(0, 1)
     combined_hand_targets = torch.zeros_like(targets)
-    combined_hand_targets[batch_ids_per_dataset[0], :32] = targets[batch_ids_per_dataset[0]][:, 3:35]
-    combined_hand_targets[batch_ids_per_dataset[1], :32] = targets[batch_ids_per_dataset[1]][:, 19:51]
+    combined_hand_targets[batch_ids_per_dataset[0], :32*interpolate_coordinates] = targets[batch_ids_per_dataset[0]][:, 3:3+32*interpolate_coordinates]
+    combined_hand_targets[batch_ids_per_dataset[1], :32*interpolate_coordinates] = targets[batch_ids_per_dataset[1]][:, 3+16*interpolate_coordinates:3+48*interpolate_coordinates]
     combined_hand_masks = torch.zeros_like(masks)
-    combined_hand_masks[batch_ids_per_dataset[0], :16] = masks[batch_ids_per_dataset[0]][:, :16]
-    combined_hand_masks[batch_ids_per_dataset[1], :16] = masks[batch_ids_per_dataset[1]][:, 8:24]
-    hand_coord_loss = hand_loss(combined_hand_targets.transpose(0, 1), combined_hand_masks, targets_start_from=0, masks_start_from=0,
-                                coords=coords_hands, heatmaps=heatmaps_hands, probabilities=None, slice_from=0)
+    combined_hand_masks[batch_ids_per_dataset[0], :16*interpolate_coordinates] = masks[batch_ids_per_dataset[0]][:, :16*interpolate_coordinates]
+    combined_hand_masks[batch_ids_per_dataset[1], :16*interpolate_coordinates] = masks[batch_ids_per_dataset[1]][:, 8*interpolate_coordinates:24*interpolate_coordinates]
+    hand_coord_loss = hand_loss(combined_hand_targets.transpose(0, 1), combined_hand_masks, targets_start_from=0,
+                                masks_start_from=0, coords=coords_hands, heatmaps=heatmaps_hands, probabilities=None,
+                                slice_from=0, interpolate_coordinates=interpolate_coordinates)
     loss = loss + hand_coord_loss
     hand_coord_losses.append(hand_coord_loss)
 
@@ -123,7 +125,7 @@ def get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_pe
 
 
 def get_mtl_losses(targets, masks, task_outputs, task_sizes, one_obj_layer, counts, is_training=False,
-                   multioutput_loss=0, t_attn=False):
+                   multioutput_loss=0, t_attn=False, interpolate_coordinates=1):
     outputs, coords, heatmaps, probabilities, objects, obj_cat = task_outputs
     num_cls_outputs, num_g_outputs, num_h_outputs, num_o_outputs, num_c_outputs = task_sizes
     targets_starting_point = num_cls_outputs
@@ -173,18 +175,20 @@ def get_mtl_losses(targets, masks, task_outputs, task_sizes, one_obj_layer, coun
     if num_g_outputs > 0:
         gaze_coord_loss = gaze_loss(targets, masks, targets_start_from=targets_starting_point,
                                     masks_start_from=masks_starting_point, coords=coords, heatmaps=heatmaps,
-                                    probabilities=probabilities, slice_ind=slice_from)
-        targets_starting_point += 16
-        masks_starting_point += 8
+                                    probabilities=probabilities, slice_ind=slice_from,
+                                    interpolate_coordinates=interpolate_coordinates)
+        targets_starting_point += 16 * interpolate_coordinates
+        masks_starting_point += 8 * interpolate_coordinates
         slice_from += 1
         loss = loss + gaze_coord_loss
         gaze_coord_losses.append(gaze_coord_loss)
     if num_h_outputs > 0:
         hand_coord_loss = hand_loss(targets, masks, targets_start_from=targets_starting_point,
                                     masks_start_from=masks_starting_point, coords=coords, heatmaps=heatmaps,
-                                    probabilities=probabilities, slice_from=slice_from)
-        targets_starting_point += 32
-        masks_starting_point += 16
+                                    probabilities=probabilities, slice_from=slice_from,
+                                    interpolate_coordinates=interpolate_coordinates)
+        targets_starting_point += 32 * interpolate_coordinates
+        masks_starting_point += 16 * interpolate_coordinates
         slice_from += 2
         loss = loss + hand_coord_loss
         hand_coord_losses.append(hand_coord_loss)

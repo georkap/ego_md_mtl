@@ -7,7 +7,7 @@ import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
-from src.models.mfnet_3d_mo import MFNET_3D as MFNET_3D_MO
+from src.models.mfnet_3d_mo import MFNET_3D_MO as MFNET_3D_MO
 from src.utils.argparse_utils import parse_args, make_log_file_name, parse_tasks_str, compare_tasks_per_dataset, parse_tasks_per_dataset
 from src.utils.file_utils import print_and_save
 from src.utils.dataset.dataset_loader import MultitaskDatasetLoader

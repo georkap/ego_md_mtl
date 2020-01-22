@@ -5,14 +5,17 @@ from torch.functional import F
 
 
 class CoordRegressionLayer(nn.Module):
-    def __init__(self, input_filters, n_locations):
+    def __init__(self, input_filters, n_locations, temporal_interpolate=1):
         super(CoordRegressionLayer, self).__init__()
+        self.temporal_interpolate = temporal_interpolate
         self.hm_conv = nn.Conv3d(input_filters, n_locations, kernel_size=1, bias=False)
         self.probability = nn.Linear(input_filters, 1, bias=False)
 
     def forward(self, h):
         probabilities = torch.zeros(0, device=h.device) # torch.nn.ReLU(self.probability(torch.squeeze(h)))
         # 1. Use a 1x1 conv to get one unnormalized heatmap per location
+        if self.temporal_interpolate > 1:
+            h = F.interpolate(h, scale_factor=(self.temporal_interpolate, 1, 1), mode='trilinear')
         unnormalized_heatmaps = self.hm_conv(h)
         # 2. Transpose the heatmap volume to keep the temporal dimension in the volume
         unnormalized_heatmaps.transpose_(2, 1).transpose_(1, 0)

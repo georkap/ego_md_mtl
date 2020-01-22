@@ -34,6 +34,7 @@ def parse_args_dataset(parser, net_type):
     parser.add_argument('--hand_list_prefix', type=str, default='', nargs='*')
     parser.add_argument('--object_list_prefix', type=str, default='', nargs='*')
     parser.add_argument('--object_cats', type=str, default='', nargs='*')
+    parser.add_argument('--interpolate_coordinates', type=int, default=1)
     parser.add_argument('--batch_size', type=int, default=1)
     if net_type in ['mfnet']:
         parser.add_argument('--clip_gradient', action='store_true')
@@ -201,14 +202,12 @@ def make_log_file_name(output_dir, args):
         log_file = None
     return log_file
 
-def parse_tasks_str(arguments):
+def parse_tasks_str(task_str, dataset_names, interpolate_coordinates):
     """ Parser for task string. '+' will split the string and will parse each part for a dataset. It will return a list
      with dictionaries. The length of the list is equal to the number of datasets in the multidataset training scheme.
      Each list entry is a dictionary where the key is the task starting letter and the value is an Int or None. Int
      means the number of classes for the task (i.e. it is a classification task) and None means a coordinate regression
       task which depending on the letter will mean a specific thing."""
-    task_str = arguments.tasks
-    dataset_names = arguments.dataset
     task_str = task_str.split('+')
     tasks_per_dataset = []
     for dataset_tasks, dataset_name in zip(task_str, dataset_names):
@@ -235,10 +234,10 @@ def parse_tasks_str(arguments):
                 max_target_size += 1
             if t == 'G':
                 num_g_tasks += 1
-                max_target_size += 16
+                max_target_size += 16 * interpolate_coordinates
             if t == 'H':
                 num_h_tasks += 1
-                max_target_size += 32
+                max_target_size += 32 * interpolate_coordinates
             if t == 'O':
                 num_o_tasks += 1
                 max_target_size += int(cls)
@@ -251,6 +250,7 @@ def parse_tasks_str(arguments):
         num_classes['num_h_tasks'] = num_h_tasks
         num_classes['num_o_tasks'] = num_o_tasks
         num_classes['num_c_tasks'] = num_c_tasks
+        num_classes['interpolate_coordinates'] = interpolate_coordinates
         num_classes['max_target_size'] = max_target_size
         num_classes['dataset'] = dataset_name
         tasks_per_dataset.append(num_classes)

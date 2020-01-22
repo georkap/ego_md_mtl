@@ -133,8 +133,11 @@ def calc_losses_per_dataset_comb(network_outputs, targets, masks, tasks_per_data
     task_targets.append(tmp_targets_1[1])
     task_targets.append(tmp_targets_1[2])
 
+    interpolate_coordinates = tasks_per_dataset[0]['interpolate_coordinates']
+
     full_loss, partial_losses = get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_per_dataset,
-                                                    comb_tasks_per_dataset, batch_ids_per_dataset, base_gpu, batch_size)
+                                                    comb_tasks_per_dataset, batch_ids_per_dataset, base_gpu, batch_size,
+                                                    interpolate_coordinates)
 
     cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses = partial_losses
 
@@ -252,6 +255,7 @@ def calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, b
         num_h_tasks = tasks_per_dataset[dataset_id]['num_h_tasks']
         num_o_tasks = tasks_per_dataset[dataset_id]['num_o_tasks']
         num_c_tasks = tasks_per_dataset[dataset_id]['num_c_tasks']
+        interpolate_coordinates = tasks_per_dataset[dataset_id]['interpolate_coordinates']
         num_coord_tasks = num_g_tasks + 2 * num_h_tasks
         # needs transpose to get the first dim to be the task and the second dim to be the batch
         tmp_targets = targets[batch_ids_per_dataset[dataset_id]].cuda(base_gpu).transpose(0, 1)
@@ -326,7 +330,8 @@ def calc_losses_per_dataset(network_output, targets, masks, tasks_per_dataset, b
 
         loss, partial_losses = get_mtl_losses(targets_per_dataset[dataset_id], masks_per_dataset[dataset_id],
                                               task_outputs, task_sizes, one_obj_layer, counts, is_training=is_training,
-                                              multioutput_loss=multioutput_loss, t_attn=t_attn)
+                                              multioutput_loss=multioutput_loss, t_attn=t_attn,
+                                              interpolate_coordinates=interpolate_coordinates)
 
         global_task_id += num_cls_tasks
         global_coord_id += num_coord_tasks

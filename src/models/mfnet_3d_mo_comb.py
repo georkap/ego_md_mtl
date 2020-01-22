@@ -31,6 +31,7 @@ class MFNET_3D_MO_COMB(nn.Module):
         self.ensemble_eval = kwargs.get('ensemble_eval', False)
         self.t_dim_in = kwargs.get('num_frames', 16)
         self.s_dim_in = kwargs.get('spatial_size', 224)
+        self.interpolate_coords = kwargs.get('interpolate_coordinates', 1)
         in_ch = kwargs.get('input_channels', 3)
         groups = 16
         # k_sec = {2: 3, 3: 4, 4: 6, 5: 3}
@@ -87,7 +88,7 @@ class MFNET_3D_MO_COMB(nn.Module):
 
         # create heatmaps
         if self.num_coords > 0:
-            self.coord_layers = CoordRegressionLayer(c5_out, self.num_coords)
+            self.coord_layers = CoordRegressionLayer(c5_out, self.num_coords, self.interpolate_coords)
 
         # final
         self.tail = nn.Sequential(OrderedDict([tailnorm, ('relu', nn.ReLU(inplace=True))]))

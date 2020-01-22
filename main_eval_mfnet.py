@@ -50,9 +50,9 @@ torch.set_printoptions(linewidth=1000000, threshold=1000000)
 
 def main():
     args = parse_args('mfnet', val=True)
-    tasks_per_dataset = parse_tasks_str(args)
+    tasks_per_dataset = parse_tasks_str(args.tasks, args.dataset, args.interpolate_coordinates)
     if args.eval_tasks is not None: # trained multi-dataset eval single-dataset
-        eval_tasks_per_dataset = parse_tasks_str(args.eval_tasks, [args.eval_dataset])
+        eval_tasks_per_dataset = parse_tasks_str(args.eval_tasks, [args.eval_dataset], args.interpolate_coordinates)
         starting_cls_id, starting_g_id, starting_h_id = compare_tasks_per_dataset(tasks_per_dataset,
                                                                                   eval_tasks_per_dataset)
         train_tasks_per_dataset = tasks_per_dataset
@@ -134,7 +134,8 @@ def main():
                                             object_list_prefix=args.object_list_prefix[:],
                                             object_categories=args.object_cats[:],
                                             validation=True, eval_gaze=args.eval_gaze,
-                                            use_flow=args.flow, flow_transforms=val_transforms_flow)
+                                            use_flow=args.flow, flow_transforms=val_transforms_flow,
+                                            interpolate_coords=args.interpolate_coordinates)
         val_iter = torch.utils.data.DataLoader(val_loader, batch_size=args.batch_size, shuffle=False,
                                                num_workers=args.num_workers, pin_memory=True)
 

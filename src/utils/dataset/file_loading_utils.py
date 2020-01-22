@@ -90,14 +90,15 @@ def load_hand_tracks(hand_path, track_idxs, use_hands):
     right_track = np.array(hand_tracks['right'], dtype=np.float32)[track_idxs]
     return left_track, right_track
 
-def load_gaze_track(gaze_path, track_idxs, norm_val, eval_gaze, use_gaze):
+def load_gaze_track(gaze_path, track_idxs, norm_val, eval_gaze, use_gaze, interpolate_coords):
     if not use_gaze:
         return None, None
     gaze_data = load_pickle(gaze_path)
     gaze_track = np.array([[value[0], value[1]] for key, value in gaze_data.items()], dtype=np.float32)
     if not eval_gaze: # if 'DoubleFullSampling' not in self.sampler.__repr__():
         gaze_track = gaze_track[track_idxs]
-        gaze_track = gaze_track[::2]
+        if interpolate_coords == 1:
+            gaze_track = gaze_track[::2]
     gaze_mask = gaze_track != [0, 0]
     gaze_mask = gaze_mask[:, 0] & gaze_mask[:, 1]
     gaze_track *= norm_val # take from [0,1] to [0, or_w] and [0, or_h] to apply transformations later

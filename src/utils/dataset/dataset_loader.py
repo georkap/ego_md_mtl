@@ -169,13 +169,14 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
     def __init__(self, sampler, split_files, dataset_names, tasks_per_dataset, batch_transform,
                  gaze_list_prefix, hand_list_prefix, object_list_prefix, object_categories,
                  validation=False, eval_gaze=False, vis_data=False, use_flow=False, flow_transforms=None,
-                 only_flow=False, map_to_epic=False):
+                 only_flow=False, map_to_epic=False, interpolate_coords=1):
         self.sampler = sampler
         # 1-1 association between dataset name, split file and resp tasks
         assert len(dataset_names) == len(tasks_per_dataset)
         self.video_list = list()
         self.dataset_infos = dict()
         self.maximum_target_size = 0
+        self.interpolate_coords = interpolate_coords
         map_gtea = False
         for i, (dataset_name, split_file, td) in enumerate(zip(dataset_names, split_files, tasks_per_dataset)):
             glp = gaze_list_prefix.pop(0) if 'G' in td else None
@@ -304,7 +305,8 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
 
         # t = time.time()
         # gaze points is the final output, gaze data is the pickle data, gaze track is intermediate versions
-        gaze_track, gaze_mask = load_gaze_track(gaze_path, track_idxs, orig_norm_val, self.eval_gaze, use_gaze)
+        gaze_track, gaze_mask = load_gaze_track(gaze_path, track_idxs, orig_norm_val, self.eval_gaze, use_gaze,
+                                                self.interpolate_coords)
         # gaze_track_time += (time.time() - t)
 
         # t = time.time()
@@ -392,8 +394,9 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
         left_hand_mask, right_hand_mask = None, None
         if use_hands:
             # subsample the hand tracks to reach the output size
-            left_track = left_track[::2]
-            right_track = right_track[::2]
+            if self.interpolate_coords == 1:
+                left_track = left_track[::2]
+                right_track = right_track[::2]
             left_track = make_dsnt_track(left_track, norm_val)
             right_track = make_dsnt_track(right_track, norm_val)
             left_hand_mask = mask_coord_bounds(left_track)
@@ -531,12 +534,13 @@ if __name__ == '__main__':
     # _oclp = [r"D:\Datasets\egocentric\EPIC_KITCHENS\EPIC_categories.csv"]
 
     # 2 test dataloader for egtea
-    # task_str = "A106V19N53GH" # "N53GH" ok # "A106V19N53GH" ok
-    # datasets = ['egtea']
-    # video_list_file = [r"other\splits\EGTEA\fake_split3.txt"]
-    # _hlp = ['hand_detection_tracks_lr005']
-    # _glp = ['gaze_tracks']
-    # _olp = [None]
+    task_str = "A106V19N53GH" # "N53GH" ok # "A106V19N53GH" ok
+    datasets = ['egtea']
+    video_list_file = [r"other\splits\EGTEA\fake_split3.txt"]
+    _hlp = ['hand_detection_tracks_lr005']
+    _glp = ['gaze_tracks']
+    _olp = [None]
+    _oclp = [None]
 
     # 3 test dataloader for epic + gtea
     # task_str = "A2513V125N352HO352+A106V19N53GH"
@@ -590,12 +594,12 @@ if __name__ == '__main__':
     # _olp = [None]
     # _oclp = [None]
 
-    # tpd = parse_tasks_str(task_str, datasets)
-    # loader = MultitaskDatasetLoader(test_sampler, video_list_file, datasets, tasks_per_dataset=tpd,
-    #                                 batch_transform=train_transforms, gaze_list_prefix=_glp, hand_list_prefix=_hlp,
-    #                                 object_list_prefix=_olp, object_categories=_oclp,
-    #                                 validation=False, eval_gaze=False, vis_data=True, use_flow=False,
-    #                                 flow_transforms=train_flow_transforms, only_flow=False)
+    tpd = parse_tasks_str(task_str, datasets, 2)
+    loader = MultitaskDatasetLoader(test_sampler, video_list_file, datasets, tasks_per_dataset=tpd,
+                                    batch_transform=train_transforms, gaze_list_prefix=_glp, hand_list_prefix=_hlp,
+                                    object_list_prefix=_olp, object_categories=_oclp,
+                                    validation=False, eval_gaze=False, vis_data=True, use_flow=False,
+                                    flow_transforms=train_flow_transforms, only_flow=False)
 
 
 
@@ -609,18 +613,18 @@ if __name__ == '__main__':
     # _oclp = [None]
 
     # 10 test dataloader for charego1+charego3 video level
-    task_str = "A157V33N38L16+A157V33N38L16"
-    datasets = ['charego1', 'charego3']
-    video_list_file = [r"D:\Code\mtl_advanced\other\splits\CHARADES_EGO\fake1st_listvl.txt",
-                       r"D:\Code\mtl_advanced\other\splits\CHARADES_EGO\fake3rd_listvl.txt"]
-    _hlp = [None]
-    _glp = [None]
-    _olp = [None]
-    _oclp = [None]
-
-    tpd = parse_tasks_str(task_str, datasets)
-    loader = MultitaskDatasetLoaderVideoLevel(MiddleSampling(16), video_list_file, datasets, tpd,
-                                              batch_transform=train_transforms, vis_data=True)
+    # task_str = "A157V33N38L16+A157V33N38L16"
+    # datasets = ['charego1', 'charego3']
+    # video_list_file = [r"D:\Code\mtl_advanced\other\splits\CHARADES_EGO\fake1st_listvl.txt",
+    #                    r"D:\Code\mtl_advanced\other\splits\CHARADES_EGO\fake3rd_listvl.txt"]
+    # _hlp = [None]
+    # _glp = [None]
+    # _olp = [None]
+    # _oclp = [None]
+    #
+    # tpd = parse_tasks_str(task_str, datasets)
+    # loader = MultitaskDatasetLoaderVideoLevel(MiddleSampling(16), video_list_file, datasets, tpd,
+    #                                           batch_transform=train_transforms, vis_data=True)
 
     # for ind in range(len(loader)):
     #     data_point = loader.__getitem__(ind)
