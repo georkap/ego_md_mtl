@@ -25,15 +25,15 @@ class DatasetInfo(object):
             if task_short in tasks_for_dataset:
                 value = tasks_for_dataset[task_short]
                 self.num_classes.append(value)
-                if value != max_num_classes[task_long]:
-                    self.mappings.append(make_class_mapping_generic(video_list, task_long))
-                elif dataset_name == 'egtea' and map_to_epic:
+                if dataset_name == 'egtea' and map_to_epic: # switched if with elif to avoid mapping for epick in eval
                     if task_short == 'V':
                         self.mappings.append(gtea_mapped_verbs)
                     elif task_short == 'N':
                         self.mappings.append(gtea_mapped_nouns)
                     else:
                         self.mappings.append(None)
+                elif value != max_num_classes[task_long]:
+                    self.mappings.append(make_class_mapping_generic(video_list, task_long))
                 else:
                     self.mappings.append(None)
             else:

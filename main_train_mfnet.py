@@ -23,7 +23,7 @@ from src.models.mfnet_3d_mo_weighted import MFNET_3D_MO_WEIGHTED
 from src.models.mfnet_3d_mo_t_attn import MFNET_3D_MO_T_ATTN
 from src.utils.argparse_utils import parse_args, parse_tasks_str, parse_tasks_per_dataset
 from src.utils.file_utils import print_and_save, save_mt_checkpoints, init_folders, resume_checkpoint, load_pretrained_weights
-from src.utils.dataset.dataset_loader import MultitaskDatasetLoader, MultitaskDatasetLoaderVideoLevel
+from src.utils.dataset.dataset_loader import MultitaskDatasetLoaderVideoLevel, create_dataset_loader
 from src.utils.video_sampler import prepare_sampler
 from src.utils.dataset.dataset_loader_transforms import RandomScale, RandomCrop, RandomHorizontalFlip, RandomHLS_2, ToTensorVid,\
     Normalize, Resize, CenterCrop, PredefinedHorizontalFlip
@@ -75,6 +75,8 @@ def main():
         if args.only_flow:
             kwargs['input_channels'] = 2
 
+    # kwargs['norm'] = args.norm
+
     kwargs["num_coords"] = num_coords
     kwargs["num_objects"] = num_objects
     kwargs["num_obj_cat"] = num_obj_cat
@@ -116,23 +118,12 @@ def main():
     train_transforms = transforms.Compose([
         RandomScale(make_square=True, aspect_ratio=[0.8, 1./0.8], slen=[224, 288]), RandomCrop((224, 224)),
         RandomHorizontalFlip(), RandomHLS_2(vars=[15, 35, 25]), ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
-    if args.only_flow:
-        train_transforms_flow = transforms.Compose([
-            RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288]), RandomCrop((224, 224)),
-            RandomHorizontalFlip(), ToTensorVid(dim=2), Normalize(mean=mean_1d, std=std_1d)])
-    else:
-        train_transforms_flow = transforms.Compose([
-            RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288]), RandomCrop((224, 224)),
-            PredefinedHorizontalFlip(), ToTensorVid(dim=2), Normalize(mean=mean_1d, std=std_1d)])
-    train_loader = MultitaskDatasetLoader(train_sampler, args.train_lists, args.dataset, tasks_per_dataset,
-                                          batch_transform=train_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
-                                          hand_list_prefix=args.hand_list_prefix[:],
-                                          object_list_prefix=args.object_list_prefix[:],
-                                          object_categories=args.object_cats[:],
-                                          use_flow=args.flow, flow_transforms=train_transforms_flow,
-                                          only_flow=args.only_flow,
-                                          map_to_epic=args.map_tasks,
-                                          interpolate_coords=args.interpolate_coordinates)
+    train_transforms_flow = transforms.Compose([
+        RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288]), RandomCrop((224, 224)),
+        RandomHorizontalFlip() if args.only_flow else PredefinedHorizontalFlip(), ToTensorVid(dim=2),
+        Normalize(mean=mean_1d, std=std_1d)])
+    train_loader = create_dataset_loader(train_sampler, args.train_lists, train_transforms, train_transforms_flow,
+                                         False, tasks_per_dataset, args)
     train_iterator = torch.utils.data.DataLoader(train_loader, batch_size=args.batch_size, shuffle=True,
                                                  num_workers=args.num_workers, pin_memory=True)
 
@@ -142,15 +133,8 @@ def main():
                                           Normalize(mean=mean_3d, std=std_3d)])
     test_transforms_flow = transforms.Compose([Resize((256, 256), False), CenterCrop((224, 224)), ToTensorVid(dim=2),
                                               Normalize(mean=mean_1d, std=std_1d)])
-    test_loader = MultitaskDatasetLoader(test_sampler, args.test_lists, args.dataset, tasks_per_dataset,
-                                         batch_transform=test_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
-                                         hand_list_prefix=args.hand_list_prefix[:],
-                                         object_list_prefix=args.object_list_prefix[:],
-                                         object_categories=args.object_cats[:],
-                                         use_flow=args.flow, flow_transforms=test_transforms_flow,
-                                         only_flow=args.only_flow,
-                                         map_to_epic=args.map_tasks,
-                                         interpolate_coords=args.interpolate_coordinates)
+    test_loader = create_dataset_loader(test_sampler, args.test_lists, test_transforms, test_transforms_flow, False,
+                                        tasks_per_dataset, args)
     test_iterator = torch.utils.data.DataLoader(test_loader, batch_size=args.batch_size, shuffle=False,
                                                 num_workers=args.num_workers, pin_memory=True)
 

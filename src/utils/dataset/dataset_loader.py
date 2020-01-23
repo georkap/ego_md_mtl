@@ -481,6 +481,18 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
 
         return to_return
 
+def create_dataset_loader(sampler, lists, transforms_rgb, transforms_flow, validation, tasks_per_dataset, args):
+    loader = MultitaskDatasetLoader(sampler, lists, args.dataset, tasks_per_dataset,
+                                    batch_transform=transforms_rgb, gaze_list_prefix=args.gaze_list_prefix[:],
+                                    hand_list_prefix=args.hand_list_prefix[:],
+                                    object_list_prefix=args.object_list_prefix[:],
+                                    object_categories=args.object_cats[:],
+                                    validation=validation, eval_gaze=args.eval_gaze,
+                                    use_flow=args.flow, flow_transforms=transforms_flow,
+                                    only_flow=args.only_flow,
+                                    map_to_epic=args.map_tasks,
+                                    interpolate_coords=args.interpolate_coordinates)
+    return loader
 
 # sample_time, indices_time, rgb_time, hand_track_time, gaze_track_time, bpv_time, ocpv_time = 0,0,0,0,0,0,0
 # transforms_time, rgb_transforms_time, tracks_transform_time, fin_tracks_time, labels_time = 0,0,0,0,0

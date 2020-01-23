@@ -29,6 +29,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
 from src.models.mfnet_3d_mo import MFNET_3D_MO
+from src.models.mfnet_3d_mo_comb import MFNET_3D_MO_COMB
 from src.models.mfnet_3d_slowfast import MFNET_3D_SF
 from src.models.mfnet_3d_mo_mm import MFNET_3D_MO_MM
 from src.models.mfnet_3d_mo_dfb import MFNET_3D_DFB
@@ -38,7 +39,7 @@ from src.models.mfnet_3d_mo_weighted import MFNET_3D_MO_WEIGHTED
 from src.models.mfnet_3d_mo_t_attn import MFNET_3D_MO_T_ATTN
 from src.utils.argparse_utils import parse_args, make_log_file_name, parse_tasks_str, parse_tasks_per_dataset, compare_tasks_per_dataset
 from src.utils.file_utils import print_and_save
-from src.utils.dataset.dataset_loader import MultitaskDatasetLoader, MultitaskDatasetLoaderVideoLevel
+from src.utils.dataset.dataset_loader import MultitaskDatasetLoaderVideoLevel, create_dataset_loader
 from src.utils.dataset.dataset_loader_transforms import Resize, RandomCrop, ToTensorVid, Normalize, CenterCrop
 from src.utils.calc_utils import eval_final_print_mt
 from src.utils.video_sampler import prepare_sampler
@@ -51,10 +52,17 @@ torch.set_printoptions(linewidth=1000000, threshold=1000000)
 def main():
     args = parse_args('mfnet', val=True)
     tasks_per_dataset = parse_tasks_str(args.tasks, args.dataset, args.interpolate_coordinates)
+    gtea_map = (args.eval_dataset == 'egtea' and args.map_tasks)
+    epic_map = (args.eval_dataset == 'epick' and args.map_tasks)
     if args.eval_tasks is not None: # trained multi-dataset eval single-dataset
         eval_tasks_per_dataset = parse_tasks_str(args.eval_tasks, [args.eval_dataset], args.interpolate_coordinates)
         starting_cls_id, starting_g_id, starting_h_id = compare_tasks_per_dataset(tasks_per_dataset,
                                                                                   eval_tasks_per_dataset)
+        if gtea_map:
+            starting_cls_id -= 2
+            starting_h_id -= 1
+        elif epic_map:
+            starting_g_id += 1
         train_tasks_per_dataset = tasks_per_dataset
         tasks_per_dataset = eval_tasks_per_dataset
         args.dataset = [args.eval_dataset]
@@ -90,14 +98,18 @@ def main():
     elif args.tdn:
         mfnet_3d = MFNET_3D_TDN
         multioutput_loss = 3
+    elif args.map_tasks:
+        mfnet_3d = MFNET_3D_MO_COMB
     else:
         mfnet_3d = MFNET_3D_MO
 
-    kwargs['num_coords'] = num_coords
+    kwargs["ensemble_eval"] = args.eval_ensemble
+
+    kwargs["num_coords"] = num_coords + (2 if args.map_tasks else 0)
     kwargs["num_objects"] = num_objects
     kwargs["num_obj_cat"] = num_obj_cat
     kwargs["one_object_layer"] = args.one_object_layer
-    kwargs["ensemble_eval"] = args.eval_ensemble
+    kwargs["interpolate_coordinates"] = args.interpolate_coordinates
     if args.long:
         kwargs["k_sec"] = {2: 3, 3: 4, 4: 11, 5: 3}
     model_ft = mfnet_3d(num_classes, **kwargs)
@@ -128,14 +140,8 @@ def main():
             Resize((256, 256), False), crop_type, ToTensorVid(), Normalize(mean=mean_3d, std=std_3d)])
         val_transforms_flow = transforms.Compose([
             Resize((256, 256), False), CenterCrop((224, 224)), ToTensorVid(dim=2), Normalize(mean=mean_1d, std=std_1d)])
-        val_loader = MultitaskDatasetLoader(val_sampler, args.val_lists, args.dataset, tasks_per_dataset,
-                                            batch_transform=val_transforms, gaze_list_prefix=args.gaze_list_prefix[:],
-                                            hand_list_prefix=args.hand_list_prefix[:],
-                                            object_list_prefix=args.object_list_prefix[:],
-                                            object_categories=args.object_cats[:],
-                                            validation=True, eval_gaze=args.eval_gaze,
-                                            use_flow=args.flow, flow_transforms=val_transforms_flow,
-                                            interpolate_coords=args.interpolate_coordinates)
+        val_loader = create_dataset_loader(val_sampler, args.val_lists, val_transforms, val_transforms_flow, True,
+                                           tasks_per_dataset, args)
         val_iter = torch.utils.data.DataLoader(val_loader, batch_size=args.batch_size, shuffle=False,
                                                num_workers=args.num_workers, pin_memory=True)
 
@@ -156,7 +162,8 @@ def main():
         top1, outputs = validate(model_ft, val_iter, objectives, checkpoint['epoch'], args.dataset, log_file,
                                  use_flow=args.flow, one_obj_layer=args.one_object_layer,
                                  multioutput_loss=multioutput_loss, eval_branch=args.eval_branch,
-                                 eval_ensemble=args.eval_ensemble, t_attn=args.t_attn)
+                                 eval_ensemble=args.eval_ensemble, t_attn=args.t_attn,
+                                 gtea_map=gtea_map)
 
         if args.eval_gaze:
             return

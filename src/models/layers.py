@@ -354,3 +354,10 @@ class TemporalAttentionCon(nn.Module):
             prob = torch.sigmoid(attention(h_ens))
             h_ens_out[:, :, task_id] = prob
         return h_ens_out # B x 8 x num_cls_tasks
+
+
+if __name__ == '__main__':
+    crl = CoordRegressionLayer(768, 1)
+    data = torch.randn(1, 768, 8, 7, 7)
+    print(crl, data)
+    c, h, p = crl(data)

@@ -665,7 +665,7 @@ def test_mfnet_mo_map(model, iterator, tasks_per_dataset, cur_epoch, dataset_typ
     return task_maps
 
 def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_file, use_flow=False, one_obj_layer=False,
-                      multioutput_loss=0, eval_branch=None, eval_ensemble=False, t_attn=False):
+                      multioutput_loss=0, eval_branch=None, eval_ensemble=False, t_attn=False, gtea_map=False):
     num_cls_tasks, num_g_tasks, num_h_tasks, num_o_tasks, num_c_tasks = task_sizes
     losses = AverageMeter()
     top1_meters = [AverageMeter() for _ in range(num_cls_tasks)]
@@ -687,6 +687,7 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
             outputs, coords, heatmaps, probabilities, objects, obj_cat = network_output
 
             if eval_ensemble:
+                # todo add swap 0, 1 in ensemble for gtea map evaluation
                 assert not multioutput_loss # only compatible for multioutput_loss ==False for now
                 if t_attn:
                     full_outputs, ens_outputs, _probs = outputs
@@ -715,15 +716,15 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
                 if t_attn:
                     ensemble_outputs.append(ens_outputs)
                     ensemble_outputs.append(_probs)
-                    outputs = ensemble_outputs
-                else:
-                    outputs = ensemble_outputs
+                outputs = ensemble_outputs
             else:
                 if t_attn:
                     full_outputs, ens_outputs, _probs = outputs
                     full_outputs.append(ens_outputs)
                     full_outputs.append(_probs)
                     outputs = full_outputs
+                # else:
+                # the default validation scheme so the outputs are already ok, coming from the network as they should
 
             if multioutput_loss:
                 assert not eval_ensemble
@@ -742,6 +743,9 @@ def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_
             if obj_cat is not None:
                 obj_cat = obj_cat[0]
                 counts[1] = obj_cat.shape[1] if one_obj_layer else len(obj_cat)
+
+            if gtea_map: # the greatest of hacks!
+                outputs[0], outputs[1], outputs[2] = outputs[2], outputs[0], outputs[1]
 
             per_task_outputs = (outputs, coords, heatmaps, probabilities, objects, obj_cat)
             loss, partial_losses = get_mtl_losses(targets, masks, per_task_outputs, task_sizes, one_obj_layer, counts,
