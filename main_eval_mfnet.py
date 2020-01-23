@@ -168,6 +168,9 @@ def main():
         if args.eval_gaze:
             return
 
+        if gtea_map: # the return of the great hack
+            num_classes[0], num_classes[1], num_classes[2] = num_classes[2], num_classes[0], num_classes[1]
+
         # calculate statistics
         for ind in range(len(num_classes)):
             video_preds = [x[0] for x in outputs[ind]]
