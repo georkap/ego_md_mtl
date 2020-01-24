@@ -5,7 +5,7 @@ from src.constants import gtea_mapped_nouns, gtea_mapped_verbs
 class DatasetInfo(object):
     def __init__(self, dataset_id, dataset_name, data_line, img_tmpl, tasks_for_dataset, cls_tasks, max_num_classes,
                  gaze_list_prefix, hand_list_prefix, object_list_prefix, object_categories_path, video_list,
-                 sub_with_flow, map_to_epic=False):
+                 sub_with_flow, map_to_epic=False, adl_hand_prefix=''):
         self.dataset_id = dataset_id
         self.dataset_name = dataset_name
         self.data_line = data_line
@@ -17,6 +17,7 @@ class DatasetInfo(object):
         self.cls_tasks = cls_tasks
         self.max_num_classes = max_num_classes
         self.sub_with_flow = sub_with_flow
+        self.adl_hand_prefix = adl_hand_prefix
 
         self.num_classes = list()
         self.mappings = list()

@@ -178,6 +178,7 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
         self.maximum_target_size = 0
         self.interpolate_coords = interpolate_coords
         map_gtea = False
+        adl_hand_prefix = ""
         for i, (dataset_name, split_file, td) in enumerate(zip(dataset_names, split_files, tasks_per_dataset)):
             glp = gaze_list_prefix.pop(0) if 'G' in td else None
             hlp = hand_list_prefix.pop(0) if 'H' in td else None
@@ -209,6 +210,7 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
                 cls_tasks = ADL_CLS_TASKS
                 max_num_classes = LABELS_ADL
                 sub_with_flow = 'ADL_frames\\'
+                adl_hand_prefix = 'tr' if 'train' in split_file else 'te'
             elif dataset_name in ['charego1', 'charego3']:
                 # charegoDataLineConstructor(dataset_name, 'sample')
                 data_line = CHAREGO1DataLineSample if dataset_name == 'charego1' else CHAREGO3DataLineSample
@@ -221,7 +223,7 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
                 sys.exit("Unknown dataset")
             video_list = read_samples_list(split_file, data_line)
             dat_info = DatasetInfo(i, dataset_name, data_line, img_tmpl, td, cls_tasks, max_num_classes, glp, hlp, olp,
-                                   ocp, video_list, sub_with_flow, map_gtea)
+                                   ocp, video_list, sub_with_flow, map_gtea, adl_hand_prefix)
             self.maximum_target_size = td['max_target_size'] if td['max_target_size'] > self.maximum_target_size else self.maximum_target_size
             self.dataset_infos[dataset_name] = dat_info
             self.video_list += video_list
@@ -546,13 +548,13 @@ if __name__ == '__main__':
     # _oclp = [r"D:\Datasets\egocentric\EPIC_KITCHENS\EPIC_categories.csv"]
 
     # 2 test dataloader for egtea
-    task_str = "A106V19N53GH" # "N53GH" ok # "A106V19N53GH" ok
-    datasets = ['egtea']
-    video_list_file = [r"other\splits\EGTEA\fake_split3.txt"]
-    _hlp = ['hand_detection_tracks_lr005']
-    _glp = ['gaze_tracks']
-    _olp = [None]
-    _oclp = [None]
+    # task_str = "A106V19N53GH" # "N53GH" ok # "A106V19N53GH" ok
+    # datasets = ['egtea']
+    # video_list_file = [r"other\splits\EGTEA\fake_split3.txt"]
+    # _hlp = ['hand_detection_tracks_lr005']
+    # _glp = ['gaze_tracks']
+    # _olp = [None]
+    # _oclp = [None]
 
     # 3 test dataloader for epic + gtea
     # task_str = "A2513V125N352HO352+A106V19N53GH"
@@ -606,7 +608,16 @@ if __name__ == '__main__':
     # _olp = [None]
     # _oclp = [None]
 
-    tpd = parse_tasks_str(task_str, datasets, 2)
+    # 9 test dataloader for adl
+    task_str = "A18L8H"
+    datasets = ['adl']
+    video_list_file = [r"D:\Code\mtl_advanced\other\splits\ADL\train_list18_fake.txt"]
+    _hlp = ["adl_hand_trackslr005_18"]
+    _glp = [None]
+    _olp = [None]
+    _oclp = [None]
+
+    tpd = parse_tasks_str(task_str, datasets, 1)
     loader = MultitaskDatasetLoader(test_sampler, video_list_file, datasets, tasks_per_dataset=tpd,
                                     batch_transform=train_transforms, gaze_list_prefix=_glp, hand_list_prefix=_hlp,
                                     object_list_prefix=_olp, object_categories=_oclp,
