@@ -11,7 +11,7 @@ import os, re, argparse, sys
 def make_base_parser(val):
     parser = argparse.ArgumentParser(description='Hand activity recognition')
 
-    parser.add_argument('dataset', type=str, nargs='*', choices=['epick', 'egtea', 'somv1', 'adl', 'charego1', 'charego3'])
+    parser.add_argument('dataset', type=str, nargs='*', choices=['epick', 'egtea', 'somv1', 'adl', 'adl18', 'charego1', 'charego3'])
     # Load the necessary paths    
     if not val:
         parser.add_argument('--train_lists', type=str, nargs='*')

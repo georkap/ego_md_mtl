@@ -211,6 +211,13 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
                 max_num_classes = LABELS_ADL
                 sub_with_flow = 'ADL_frames\\'
                 adl_hand_prefix = 'tr' if 'train' in split_file else 'te'
+            elif dataset_name == 'adl18':
+                data_line = ADLDataLine
+                img_tmpl = '{:06d}.jpg'
+                cls_tasks = ADL18_CLS_TASKS
+                max_num_classes = LABELS_ADL18
+                sub_with_flow = 'ADL_frames\\'
+                adl_hand_prefix = 'tr' if 'train' in split_file else 'te'
             elif dataset_name in ['charego1', 'charego3']:
                 # charegoDataLineConstructor(dataset_name, 'sample')
                 data_line = CHAREGO1DataLineSample if dataset_name == 'charego1' else CHAREGO3DataLineSample
@@ -251,7 +258,7 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
         elif isinstance(data_line, SOMETHINGV1DataLine):
             dataset_name = 'somv1'
         elif isinstance(data_line, ADLDataLine):
-            dataset_name = 'adl'
+            dataset_name = 'adl18'
         elif isinstance(data_line, CHAREGO1DataLineSample):
             dataset_name = 'charego1'
         elif isinstance(data_line, CHAREGO3DataLineSample):
@@ -423,7 +430,7 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
         mappings = self.dataset_infos[dataset_name].mappings
         for i, cls_task in enumerate(all_cls_tasks):
             if cls_task in tasks_for_dataset:
-                if cls_task == 'L' and dataset_name == 'adl': # hack only for ADL location labels
+                if cls_task == 'L' and dataset_name in ['adl', 'adl18']: # hack only for ADL location labels
                     label_num = data_line.label_location(sampled_idxs)
                 else:
                     label_num = getattr(data_line, all_cls_tasks_names[i])

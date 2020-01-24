@@ -22,6 +22,10 @@ ADL_CLASSES = [31, 8] # AL
 LABELS_ADL = {'label_action': ADL_CLASSES[0], 'label_location': ADL_CLASSES[1]}
 ADL_CLS_TASKS = ['A', 'L']
 
+ADL18_CLASSES = [18, 8] # AL
+LABELS_ADL18 = {'label_action': ADL18_CLASSES[0], 'label_location': ADL18_CLASSES[1]}
+ADL18_CLS_TASKS = ['A', 'L']
+
 CHARADES_CLASSES = [157, 33, 38, 16] # AVNL
 LABELS_CHARADES = {'label_action': CHARADES_CLASSES[0], 'label_verb': CHARADES_CLASSES[1],
                    'label_noun': CHARADES_CLASSES[2], 'label_location': CHARADES_CLASSES[3]}
