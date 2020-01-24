@@ -4,8 +4,16 @@ mtl advanced
 """
 
 import os, argparse
+import numpy as np
 
 valid_actions = [1,2,3,4,5,6,9,10,11,12,13,14,15,17,20,22,23,24]
+
+def make_class_mapping_generic(classes):
+    classes = np.sort(classes)
+    mapping_dict = {}
+    for i, c in enumerate(classes):
+        mapping_dict[c] = i
+    return mapping_dict
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -13,6 +21,7 @@ def parse_args():
     parser.add_argument('locations_dir_path')
     parser.add_argument('out_file_name_with_path', type=str)
     parser.add_argument('--only_valid_actions', default=False, action='store_true')
+    parser.add_argument('--valid_actions_mapped', default=False, action='store_true')
     return parser.parse_args()
 
 def search_for_locations(locations_lines, start_a, end_a):
@@ -43,8 +52,12 @@ args = parse_args()
 annots_dir = args.annots_dir_path
 locations_dir = args.locations_dir_path
 only_valid_actions = args.only_valid_actions
+valid_actions_mapped = args.valid_actions_mapped
 outfile_path = args.out_file_name_with_path
 outfile_dir = os.path.dirname(outfile_path)
+
+action_mapping = make_class_mapping_generic(valid_actions)
+
 if not os.path.exists(outfile_dir):
     os.makedirs(outfile_dir)
 
@@ -68,12 +81,15 @@ for i, annot_file in enumerate(annot_files):
         data = l.strip().split()
         start_frame = data[0]
         end_frame = data[1]
-        action = int(data[2]) - 1 # turn action into 0-based
+        # action = int(data[2]) - 1 # turn action into 0-based
+        action = int(data[2])
         if only_valid_actions:
-            if action + 1 not in valid_actions:
+            if action not in valid_actions:
                 continue
-        if action < 0: # to avoid a weirdly labeled action out of the action set
+        if action < 1: # to avoid a weirdly labeled action out of the action set
             continue
+        if only_valid_actions and valid_actions_mapped:
+            action = action_mapping[action]
         locations = search_for_locations(loc_lines, start_frame, end_frame)
         segment_dir = os.path.join(base_dir, annot_name)
         num_frames = int(end_frame) - int(start_frame) + 1 # assume inclusive of end frame
