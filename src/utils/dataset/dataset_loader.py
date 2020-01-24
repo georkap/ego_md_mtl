@@ -616,9 +616,9 @@ if __name__ == '__main__':
     # _oclp = [None]
 
     # 9 test dataloader for adl
-    task_str = "A18L8H"
+    task_str = "A18"
     datasets = ['adl']
-    video_list_file = [r"D:\Code\mtl_advanced\other\splits\ADL\train_list18_fake.txt"]
+    video_list_file = [r"D:\Code\mtl_advanced\other\splits\ADL\test_list18.txt"]
     _hlp = ["adl_hand_trackslr005_18"]
     _glp = [None]
     _olp = [None]
