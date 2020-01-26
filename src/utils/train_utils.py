@@ -874,9 +874,13 @@ def validate_mfnet_mo_json(model, test_iterator, dataset, action_file):
     print("Running on test set {} of EPIC".format(dataset))
     with torch.no_grad():
         model.eval()
-        for batch_idx, (inputs, targets, uid) in enumerate(test_iterator):
-            inputs = inputs.cuda()
-            outputs, _, _ = model(inputs)
+        for batch_idx, data in enumerate(test_iterator):
+            inputs, targets, masks, uid = init_inputs(data=data, use_flow=False, base_gpu=None)
+            network_output = model(inputs)
+            outputs, coords, heatmaps, probabilities, objects, obj_cat = network_output
+
+            # inputs = inputs.cuda()
+            # outputs, = model(inputs)
 
             batch_size = outputs[0].size(0)
 
