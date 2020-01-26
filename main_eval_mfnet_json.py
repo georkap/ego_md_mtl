@@ -8,6 +8,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
 from src.models.mfnet_3d_mo import MFNET_3D_MO as MFNET_3D_MO
+from src.models.mfnet_3d_mo_comb import MFNET_3D_MO_COMB
 from src.utils.argparse_utils import parse_args, make_log_file_name, parse_tasks_str, compare_tasks_per_dataset, parse_tasks_per_dataset
 from src.utils.file_utils import print_and_save
 from src.utils.dataset.dataset_loader import create_dataset_loader
@@ -67,7 +68,10 @@ def main():
     print_and_save(args, log_file)
     cudnn.benchmark = True
 
-    mfnet_3d = MFNET_3D_MO
+    if args.map_tasks:
+        mfnet_3d = MFNET_3D_MO_COMB
+    else:
+        mfnet_3d = MFNET_3D_MO
 
     kwargs = dict()
     kwargs["num_coords"] = num_coords + (2 if args.map_tasks else 0)
