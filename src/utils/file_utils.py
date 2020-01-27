@@ -308,6 +308,11 @@ def load_pretrained_weights(model_ft, args):
             for k, key in enumerate(conv_keys):
                 new_key = key.replace('conv{}'.format(i), 'conv{}_tdn'.format(i))
                 base_dict[new_key] = base_dict[key]
+    if args.epic_pt_gtea:
+        coord_key = 'coord_layers.hm_conv.weight'
+        xavier_weight = model_ft.coord_layers.hm_conv.weight.detach()
+        xavier_weight[1:] = base_dict[coord_key]
+        base_dict[coord_key] = xavier_weight
     if args.flow: # load the pretrained weights to both the 'rgb' and 'flow' streams
         rgb_branch = getattr(model_ft, 'RGB')
         rgb_branch.load_state_dict(base_dict, strict=False)
