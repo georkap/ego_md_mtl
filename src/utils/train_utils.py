@@ -581,7 +581,7 @@ def test_mfnet_mo(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_ty
                   one_obj_layer=False, multioutput_loss=0, t_attn=False):
     is_training = False
     dataset_metrics = init_test_metrics(tasks_per_dataset)
-
+    t0 = time.time()
     with torch.no_grad():
         model.eval()
         print_and_save('Evaluating after epoch: {} on {} set'.format(cur_epoch, dataset_type), log_file)
@@ -604,10 +604,12 @@ def test_mfnet_mo(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_ty
             top1_meters = dataset_metrics[dataset_id]['top1_meters']
             for tasktop1 in top1_meters:
                 task_top1s.append(tasktop1.avg)
-
+    print_and_save("Epoch test time: {}".format(time.time() - t0), log_file)
     return task_top1s
 
 def test_mfnet_mo_map(model, iterator, tasks_per_dataset, cur_epoch, dataset_type, log_file, gpus, video_splits=25):
+    map_eval_time = AverageMeter()
+
     dataset_outputs, dataset_gts, dataset_ids = [], [], []
     for i, dat in enumerate(tasks_per_dataset):
         num_cls_tasks = dat['num_cls_tasks']
@@ -619,10 +621,11 @@ def test_mfnet_mo_map(model, iterator, tasks_per_dataset, cur_epoch, dataset_typ
             dataset_gts[i].append([])
             dataset_ids[i].append([])
 
+    t0 = time.time()
     with torch.no_grad():
         model.eval()
         print_and_save('mAP evaluation after epoch: {} on {} set'.format(cur_epoch, dataset_type), log_file)
-        print_and_save('mAP for {} segments per video'.format(video_splits), log_file)
+        print_and_save('mAP for {} segments per video\n'.format(video_splits), log_file)
         for batch_idx, data in enumerate(iterator):
             # small overhead here, don't really need it
             inputs, targets, _, dataset_ids, batch_ids_per_dataset = init_inputs_batch(data, tasks_per_dataset, False, gpus[0])
@@ -650,6 +653,10 @@ def test_mfnet_mo_map(model, iterator, tasks_per_dataset, cur_epoch, dataset_typ
                 dataset_outputs[cur_dat_id][task_id].append(task_outputs_vid.cpu().numpy())
                 dataset_gts[cur_dat_id][task_id].append(task_targets.cpu().numpy())
 
+            print("\rDoing batch {}/{}".format(batch_idx, len(iterator)))
+    map_eval_time.update(time.time() - t0)
+    t0 = time.time()
+    print_and_save("\nEpoch calculation time: {}".format(map_eval_time.sum), log_file)
     task_maps = list()
     # mAP calculation per dataset per task
     for d_id, dat in enumerate(tasks_per_dataset):
@@ -661,7 +668,7 @@ def test_mfnet_mo_map(model, iterator, tasks_per_dataset, cur_epoch, dataset_typ
             print_and_save('mAP {:.3f}'.format(mAP), log_file)
             # submission_file(ids, outputs, '{}/epoch_{:03d}.txt'.format(args.cache, epoch+1))
             task_maps.append(mAP)
-
+    print_and_save("\nMap calculation time: {}".format(time.time() - t0), log_file)
     return task_maps
 
 def validate_mfnet_mo(model, test_iterator, task_sizes, cur_epoch, dataset, log_file, use_flow=False, one_obj_layer=False,
