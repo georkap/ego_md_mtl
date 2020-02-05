@@ -22,7 +22,11 @@ class MFNET_3D_MO_COMB(nn.Module):
         super(MFNET_3D_MO_COMB, self).__init__()
         # support for arbitrary number of output layers, but it is the user's job to make sure they make sense
         # (e.g. actions->actions and not actions->verbs,nouns etc.)
-        self.num_classes = num_classes[0:4] # to remove egtea VN tasks
+        map_charades = kwargs.get('map_charades')
+        if map_charades:
+            self.num_classes = num_classes[0:3] # to remove all charego3 tasks
+        else:
+            self.num_classes = num_classes[0:4] # to remove egtea VN tasks
         self.num_coords = kwargs.get('num_coords', 0) - 2 # to remove one of the hand tasks
         self.num_objects = kwargs.get('num_objects', None)
         self.num_obj_cat = kwargs.get('num_obj_cat', None)

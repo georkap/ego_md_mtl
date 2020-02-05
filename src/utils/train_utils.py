@@ -70,7 +70,7 @@ def init_inputs_batch(data, tasks_per_dataset, use_flow, base_gpu):
     batch_ids_per_dataset = init_batch(tasks_per_dataset, dataset_ids)
     return inputs, targets, masks, dataset_ids, batch_ids_per_dataset
 
-def val_outputs_per_dataset(network_output, targets, tasks_per_dataset, batch_ids_per_dataset):
+def val_outputs_per_dataset(network_output, targets, tasks_per_dataset, batch_ids_per_dataset, map_tasks):
     (outputs, coords, heatmaps, probabilities, objects, obj_cat) = network_output
     outputs_per_dataset = []
     targets_per_dataset = []
@@ -90,10 +90,11 @@ def val_outputs_per_dataset(network_output, targets, tasks_per_dataset, batch_id
         outputs_per_dataset.append([])
         # when a dataset does not have any representative samples in a batch
         if not len(tmp_targets.transpose(0, 1)[0]) > 0:
-            global_task_id += num_cls_tasks
-            global_coord_id += num_coord_tasks
-            global_object_id += num_o_tasks
-            global_obj_cat_id += num_c_tasks
+            if not map_tasks:
+                global_task_id += num_cls_tasks
+                global_coord_id += num_coord_tasks
+                global_object_id += num_o_tasks
+                global_obj_cat_id += num_c_tasks
             continue
         # get model's outputs for the classification tasks for the current dataset
         for task_id in range(num_cls_tasks):
@@ -746,7 +747,8 @@ def test_mfnet_mo(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_ty
     print_and_save("Epoch test time: {}".format(time.time() - t0), log_file)
     return task_top1s
 
-def test_mfnet_mo_map(model, iterator, tasks_per_dataset, cur_epoch, dataset_type, log_file, gpus, video_splits=25):
+def test_mfnet_mo_map(model, iterator, tasks_per_dataset, cur_epoch, dataset_type, log_file, gpus, video_splits=25,
+                      map_tasks=False):
     map_eval_time = AverageMeter()
 
     dataset_outputs, dataset_gts, dataset_ids = [], [], []
@@ -774,7 +776,7 @@ def test_mfnet_mo_map(model, iterator, tasks_per_dataset, cur_epoch, dataset_typ
 
             network_output = model(inputs)
             outputs_per_dataset, targets_per_dataset = val_outputs_per_dataset(
-                network_output, targets, tasks_per_dataset, batch_ids_per_dataset)
+                network_output, targets, tasks_per_dataset, batch_ids_per_dataset, map_tasks)
 
             # sublist per dataset task here, probably size 4 (for 4 tasks) and inside the tensor with the data [Bxlogits]
             outputs_per_dataset = outputs_per_dataset[cur_dat_id]

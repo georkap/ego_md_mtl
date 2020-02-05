@@ -70,6 +70,8 @@ def main():
         multioutput_loss = 3
     elif args.map_tasks:
         mfnet_3d = MFNET_3D_MO_COMB
+        if 'charego1' in args.dataset and 'charego3' in args.dataset:
+            kwargs['map_charades'] = True
     else:
         mfnet_3d = MFNET_3D_MO
         if args.only_flow:
@@ -141,8 +143,9 @@ def main():
     if args.eval_map_vl:
         map_sampler = prepare_sampler('middle', 16, None, speed=None, window=args.eval_window)
         map_loader = MultitaskDatasetLoaderVideoLevel(map_sampler, args.eval_lists_vl, args.dataset, tasks_per_dataset,
-                                                      test_transforms, vis_data=False)
-        map_iterator = torch.utils.data.DataLoader(map_loader, batch_size=25, shuffle=False,
+                                                      test_transforms,  video_splits=args.eval_map_vid_splits,
+                                                      vis_data=False)
+        map_iterator = torch.utils.data.DataLoader(map_loader, batch_size=args.eval_map_vid_splits, shuffle=False,
                                                    num_workers=args.num_workers, pin_memory=True)
 
     lr_scheduler = load_lr_scheduler(args.lr_type, args.lr_steps, optimizer, len(train_iterator))
@@ -176,7 +179,7 @@ def main():
                                        model_name, epoch)
             if args.eval_map_vl:
                 new_mAP = test_mfnet_mo_map(model_ft, map_iterator, tasks_per_dataset, epoch, "Video level test", log_file,
-                                            args.gpus)
+                                            args.gpus, map_tasks=args.map_tasks)
                 mAP = save_mt_checkpoints(model_ft, optimizer, mAP, new_mAP, args.save_all_weights, output_dir,
                                           model_name, epoch, mAP=True)
 
