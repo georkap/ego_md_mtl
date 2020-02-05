@@ -147,28 +147,31 @@ def main():
 
     lr_scheduler = load_lr_scheduler(args.lr_type, args.lr_steps, optimizer, len(train_iterator))
 
+    kwargs = {'lr_scheduler': lr_scheduler}
     if args.map_tasks:
         train = train_mfnet_mo_comb
         test = test_mfnet_mo_comb
+        if 'charego1' in args.dataset and 'charego3' in args.dataset:
+            kwargs['map_charades'] = True
     else:
         train = train_mfnet_mo
         test = test_mfnet_mo
+        kwargs['moo'] = args.moo
+        kwargs['use_flow'] = args.flow
+        kwargs['one_obj_layer'] = args.one_object_layer
+        kwargs['grad_acc_batches'] = args.grad_acc_batches
+        kwargs['multioutput_loss'] = multioutput_loss
+        kwargs['t_attn'] = args.t_attn
     num_cls_tasks = objectives[0]
     top1 = [0.0] * num_cls_tasks
     if args.eval_map_vl:
         mAP = [0.0] * num_cls_tasks
     for epoch in range(args.max_epochs):
-        train(model_ft, optimizer, train_iterator, tasks_per_dataset, epoch, log_file, args.gpus,
-              lr_scheduler=lr_scheduler, moo=args.moo, use_flow=args.flow, one_obj_layer=args.one_object_layer,
-              grad_acc_batches=args.grad_acc_batches, multioutput_loss=multioutput_loss, t_attn=args.t_attn)
+        train(model_ft, optimizer, train_iterator, tasks_per_dataset, epoch, log_file, args.gpus, **kwargs)
         if (epoch+1) % args.eval_freq == 0:
             if args.eval_on_train:
-                test(model_ft, train_iterator, tasks_per_dataset, epoch, "Train", log_file, args.gpus,
-                     use_flow=args.flow, one_obj_layer=args.one_object_layer, multioutput_loss=multioutput_loss,
-                     t_attn=args.t_attn)
-            new_top1 = test(model_ft, test_iterator, tasks_per_dataset, epoch, "Test", log_file, args.gpus,
-                            use_flow=args.flow, one_obj_layer=args.one_object_layer, multioutput_loss=multioutput_loss,
-                            t_attn=args.t_attn)
+                test(model_ft, train_iterator, tasks_per_dataset, epoch, "Train", log_file, args.gpus, **kwargs)
+            new_top1 = test(model_ft, test_iterator, tasks_per_dataset, epoch, "Test", log_file, args.gpus, **kwargs)
             top1 = save_mt_checkpoints(model_ft, optimizer, top1, new_top1, args.save_all_weights, output_dir,
                                        model_name, epoch)
             if args.eval_map_vl:
@@ -179,7 +182,6 @@ def main():
 
             if isinstance(lr_scheduler, ReduceLROnPlateau):
                 lr_scheduler.step(new_top1[0])
-
 
 if __name__ == '__main__':
     main()

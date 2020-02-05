@@ -5,6 +5,39 @@ from src.losses.object_loss import object_loss
 from src.losses.min_norm_solvers import MinNormSolver, gradient_normalizers
 from src.constants import gtea_mapped_verbs, gtea_mapped_nouns
 
+def get_mtl_losses_comb_char(task_outputs, targets, batch_ids_per_dataset, base_gpu, batch_size):
+
+    cls_losses = []
+    tmp_targets_0 = targets[batch_ids_per_dataset[0]].transpose(0, 1)
+    tmp_targets_1 = targets[batch_ids_per_dataset[1]].transpose(0, 1)
+    # combined actions, verbs and nouns
+    # actions
+    combined_cls0_targets = torch.zeros(batch_size, dtype=torch.long, device=base_gpu)
+    combined_cls0_targets[batch_ids_per_dataset[0]] = tmp_targets_0[0, :].long()
+    combined_cls0_targets[batch_ids_per_dataset[1]] = tmp_targets_1[0, :].long()
+    loss_for_task = F.cross_entropy(task_outputs[0], combined_cls0_targets, reduction='mean')
+    cls_losses.append(loss_for_task)
+
+    # verbs
+    combined_cls1_targets = torch.zeros(batch_size, dtype=torch.long, device=base_gpu)
+    combined_cls1_targets[batch_ids_per_dataset[0]] = tmp_targets_0[1, :].long()
+    combined_cls1_targets[batch_ids_per_dataset[1]] = tmp_targets_1[1, :].long()
+    loss_for_task = F.cross_entropy(task_outputs[1], combined_cls1_targets, reduction='mean')
+    cls_losses.append(loss_for_task)
+
+    # nouns
+    combined_cls2_targets = torch.zeros(batch_size, dtype=torch.long, device=base_gpu)
+    combined_cls2_targets[batch_ids_per_dataset[0]] = tmp_targets_0[2, :].long()
+    combined_cls2_targets[batch_ids_per_dataset[1]] = tmp_targets_1[2, :].long()
+    loss_for_task = F.cross_entropy(task_outputs[2], combined_cls2_targets, reduction='mean')
+    cls_losses.append(loss_for_task)
+
+    loss = sum(cls_losses) # sum the classification losses for the 4 combined classification tasks
+
+    gaze_coord_losses, hand_coord_losses = [], []
+    object_losses, obj_cat_losses = [], []
+    partial_losses = cls_losses, gaze_coord_losses, hand_coord_losses, object_losses, obj_cat_losses
+    return loss, partial_losses
 
 def get_mtl_losses_comb(task_outputs, coords, heatmaps, targets, masks, tasks_per_dataset, comb_tasks_per_dataset,
                         batch_ids_per_dataset, base_gpu, batch_size, interpolate_coordinates):
