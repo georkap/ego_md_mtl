@@ -675,10 +675,19 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
 
 def test_mfnet_mo_comb(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_type, log_file, gpus, **kwargs):
     is_training = False
-    # reduce the tasks for egtea
+    map_charades = kwargs.get('map_charades', False)
     comb_tasks_per_dataset = copy.deepcopy(tasks_per_dataset)
-    comb_tasks_per_dataset[1]['num_cls_tasks'] -= 2
-    comb_tasks_per_dataset[1]['num_h_tasks'] -= 1
+    if map_charades:
+        comb_tasks_per_dataset[1]['num_cls_tasks'] -= 3
+        calc_losses = calc_losses_per_dataset_comb_char
+        make_print = make_to_print_comb_char
+    else:
+        # reduce the tasks for egtea
+        comb_tasks_per_dataset[1]['num_cls_tasks'] -= 2
+        comb_tasks_per_dataset[1]['num_h_tasks'] -= 1
+        calc_losses = calc_losses_per_dataset_comb
+        make_print = make_to_print_comb
+
     dataset_metrics = init_test_metrics(tasks_per_dataset)
 
     with torch.no_grad():
