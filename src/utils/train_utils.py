@@ -138,7 +138,7 @@ def calc_losses_per_dataset_comb_char(network_outputs, targets, masks, tasks_per
     # update metrics
     full_losses, dataset_metrics = metrics
     if dataset_batch_size_0 > 0:
-        t1, t5 = accuracy(task_outputs[0].detach().cpu(), task_targets[0].detach().cpu().long(), topk=(1, 5))
+        t1, t5 = accuracy(task_outputs[0][batch_ids_per_dataset[0]].detach().cpu(), task_targets[0].detach().cpu().long(), topk=(1, 5))
         dataset_metrics[0]['top1_meters'][0].update(t1.item(), dataset_batch_size_0)
         dataset_metrics[0]['top5_meters'][0].update(t5.item(), dataset_batch_size_0)
         t1, t5 = accuracy(task_outputs[1][batch_ids_per_dataset[0]].detach().cpu(), task_targets[1].detach().cpu().long(), topk=(1, 5))
@@ -148,7 +148,7 @@ def calc_losses_per_dataset_comb_char(network_outputs, targets, masks, tasks_per
         dataset_metrics[0]['top1_meters'][2].update(t1.item(), dataset_batch_size_0)
         dataset_metrics[0]['top5_meters'][2].update(t5.item(), dataset_batch_size_0)
     if dataset_batch_size_1 > 0:
-        t1, t5 = accuracy(task_outputs[3].detach().cpu(), task_targets[3].detach().cpu().long(), topk=(1, 5))
+        t1, t5 = accuracy(task_outputs[0][batch_ids_per_dataset[1]].detach().cpu(), task_targets[3].detach().cpu().long(), topk=(1, 5))
         dataset_metrics[1]['top1_meters'][0].update(t1.item(), dataset_batch_size_1)
         dataset_metrics[1]['top5_meters'][0].update(t5.item(), dataset_batch_size_1)
         t1, t5 = accuracy(task_outputs[1][batch_ids_per_dataset[1]].detach().cpu(), task_targets[4].detach().cpu().long(), topk=(1, 5))
