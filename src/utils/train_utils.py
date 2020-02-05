@@ -698,11 +698,11 @@ def test_mfnet_mo_comb(model, test_iterator, tasks_per_dataset, cur_epoch, datas
                                                                                            False, gpus[0])
 
             network_output = model(inputs)
-            _ = calc_losses_per_dataset_comb(network_output, targets, masks, tasks_per_dataset, comb_tasks_per_dataset,
-                                             batch_ids_per_dataset, is_training, gpus[0], (None, dataset_metrics))
+            _ = calc_losses(network_output, targets, masks, tasks_per_dataset, comb_tasks_per_dataset,
+                            batch_ids_per_dataset, is_training, gpus[0], (None, dataset_metrics))
             # print results
             to_print = '[Epoch:{}, Batch {}/{}]'.format(cur_epoch, batch_idx, len(test_iterator))
-            make_to_print_comb(to_print, log_file, tasks_per_dataset, (None, dataset_metrics), is_training)
+            make_print(to_print, log_file, tasks_per_dataset, (None, dataset_metrics), is_training)
         make_final_test_print(tasks_per_dataset, dataset_metrics, dataset_type, log_file)
 
         task_top1s = list()
