@@ -173,6 +173,8 @@ def main():
 
         # calculate statistics
         for ind in range(len(num_classes)):
+            if ind in [0, 2]:
+                continue
             video_preds = [x[0] for x in outputs[ind]]
             video_labels = [x[1] for x in outputs[ind]]
             task_type = ''

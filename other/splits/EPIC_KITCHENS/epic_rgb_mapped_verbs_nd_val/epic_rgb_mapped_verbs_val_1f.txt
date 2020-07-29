@@ -1,0 +1,1 @@
+data\EPIC_KITCHENS\frames_rgb_flow\rgb\train\P30\P30_01 68 1 0 36426 363

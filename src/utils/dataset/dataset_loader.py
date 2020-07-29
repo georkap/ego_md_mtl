@@ -191,8 +191,10 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
                 max_num_classes = LABELS_EPIC
                 sub_with_flow = 'rgb\\'
             elif dataset_name == 'egtea':
-                data_line = GTEADataLine
-                img_tmpl = 'img_{:05d}.jpg'
+                # data_line = GTEADataLine
+                # img_tmpl = 'img_{:05d}.jpg'
+                data_line = EPICDataLine
+                img_tmpl = 'frame_{:010d}.jpg'
                 cls_tasks = GTEA_CLS_TASKS
                 max_num_classes = LABELS_GTEA
                 sub_with_flow = 'clips_frames\\'
@@ -252,7 +254,8 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
     def __getitem__(self, index):
         data_line = self.video_list[index]
         if isinstance(data_line, EPICDataLine):  # parse EPIC line
-            dataset_name = 'epick'
+            # dataset_name = 'epick'
+            dataset_name = 'egtea'
         elif isinstance(data_line, GTEADataLine):  # parse EGTEA line
             dataset_name = 'egtea'
         elif isinstance(data_line, SOMETHINGV1DataLine):

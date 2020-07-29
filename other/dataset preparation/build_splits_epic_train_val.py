@@ -11,6 +11,7 @@ of epic kitchens
 @author: Γιώργος
 """
 import os, pandas, argparse
+from src.constants import gtea_mapped_verbs, gtea_mapped_nouns
 
 
 def parse_args():
@@ -20,9 +21,11 @@ def parse_args():
     parser.add_argument("--epic_annot_file", type=str,
                         default=r"D:\Datasets\egocentric\EPIC_KITCHENS\EPIC_train_action_labels_new.csv")
     parser.add_argument("--selected_classes", type=int, nargs="*", default=None)
+    parser.add_argument("--selected_task", type=str, default='verbs', choices=['verbs', 'nouns'])
     parser.add_argument("--split_type", type=str, default="validation", choices=['75', 'val', 'brd'])
     parser.add_argument("--nd", default=False, action='store_true')
     parser.add_argument("--act", default=False, action='store_true')
+    parser.add_argument("--map_to_gtea", default=False, action='store_true')
     parser.add_argument("--action_file", type=str,
                         default=r"D:\Datasets\egocentric\EPIC_KITCHENS\EPIC_action_classes_new.csv")
 
@@ -31,6 +34,16 @@ def parse_args():
 
 args = parse_args()
 selected_classes = args.selected_classes
+selected_task = args.selected_task
+map_to_gtea = args.map_to_gtea
+if map_to_gtea:
+    epic_mapped_verbs = {value: key for (key, value) in gtea_mapped_verbs.items()}
+    epic_mapped_verbs[4] = 9
+    epic_mapped_nouns = {value: key for (key, value) in gtea_mapped_nouns.items()}
+    if selected_task == 'verbs':
+        selected_classes = list(set(gtea_mapped_verbs.values()))
+    else: # == 'nouns'
+        selected_classes = list(set(gtea_mapped_nouns.values()))
 base_dir = args.data_dir_path
 
 bad_uids = [126, 961, 5099, 12599, 21740, 25710, 26811, 28585, 33647, 37431]
@@ -73,10 +86,20 @@ for index, row in annotations.iterrows():
     stop_frame = row.stop_frame
     num_frames = stop_frame - start_frame
     verb_class = row.verb_class
-    if selected_classes:
-        if verb_class not in selected_classes:
-            continue
     noun_class = row.noun_class
+    if selected_classes:
+        if selected_task == 'verbs':
+            if verb_class not in selected_classes:
+                continue
+            if map_to_gtea:
+                verb_class = epic_mapped_verbs[verb_class]
+                noun_class = 0
+        else: # if selected_task == 'nouns':
+            if noun_class not in selected_classes:
+                continue
+            if map_to_gtea:
+                verb_class = 0
+                noun_class = epic_mapped_nouns[noun_class]
     pid = row.participant_id
     uid = row.uid
     if args.nd and uid in bad_uids:
