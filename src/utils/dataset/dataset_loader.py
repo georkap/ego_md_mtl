@@ -169,7 +169,7 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
     def __init__(self, sampler, split_files, dataset_names, tasks_per_dataset, batch_transform,
                  gaze_list_prefix, hand_list_prefix, object_list_prefix, object_categories,
                  validation=False, eval_gaze=False, vis_data=False, use_flow=False, flow_transforms=None,
-                 only_flow=False, map_to_epic=False, interpolate_coords=1):
+                 only_flow=False, map_to_epic=False, interpolate_coords=1, batch_strategy="mixed"):
         self.sampler = sampler
         # 1-1 association between dataset name, split file and resp tasks
         assert len(dataset_names) == len(tasks_per_dataset)
@@ -243,6 +243,7 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
         self.eval_gaze = eval_gaze
         self.vis_data = vis_data
         self.only_flow = only_flow
+        self.batch_strategy = batch_strategy
         if self.only_flow:
             self.use_flow = False
 
@@ -500,7 +501,8 @@ def create_dataset_loader(sampler, lists, transforms_rgb, transforms_flow, valid
                                     use_flow=args.flow, flow_transforms=transforms_flow,
                                     only_flow=args.only_flow,
                                     map_to_epic=args.map_tasks,
-                                    interpolate_coords=args.interpolate_coordinates)
+                                    interpolate_coords=args.interpolate_coordinates,
+                                    batch_strategy=args.batches)
     return loader
 
 # sample_time, indices_time, rgb_time, hand_track_time, gaze_track_time, bpv_time, ocpv_time = 0,0,0,0,0,0,0

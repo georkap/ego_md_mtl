@@ -96,7 +96,10 @@ def parse_args_training(parser):
     parser.add_argument('--decay', type=float, default=0.0005)  # decay for mfnet is 0.0001
     parser.add_argument('--max_epochs', type=int, default=20)
     parser.add_argument('--grad_acc_batches', type=int, default=None)
-    
+    parser.add_argument('--batch_strategy', type=str, default='mixed', choices=['mixed','interleaved','full'],
+                        help="mixed: to compose a batch it uses samples from all datasets. "\
+                        +"interleaved: each batch is composed from a distinct dataset, but batches from all datasets are used during training at random"\
+                        +"full: uses a dataset in full before switching to the next one")
     return parser
 
 
@@ -187,6 +190,8 @@ def make_model_name(args, net_type):
         model_name = model_name + "_flow"
     if args.only_flow:
         model_name = model_name + "_only_flow"
+    if args.batch_strategy != "mixed":
+        model_name = model_name + "_{}".format(args.batches)
 
     model_name = model_name + args.append_to_model_name
     
