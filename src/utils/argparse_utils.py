@@ -190,8 +190,8 @@ def make_model_name(args, net_type):
         model_name = model_name + "_flow"
     if args.only_flow:
         model_name = model_name + "_only_flow"
-    if args.batch_strategy != "mixed":
-        model_name = model_name + "_{}".format(args.batches)
+    if args.batch_strategy:
+        model_name = model_name + "_{}".format(args.batch_strategy)
 
     model_name = model_name + args.append_to_model_name
     

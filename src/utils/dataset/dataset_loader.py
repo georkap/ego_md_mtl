@@ -169,7 +169,7 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
     def __init__(self, sampler, split_files, dataset_names, tasks_per_dataset, batch_transform,
                  gaze_list_prefix, hand_list_prefix, object_list_prefix, object_categories,
                  validation=False, eval_gaze=False, vis_data=False, use_flow=False, flow_transforms=None,
-                 only_flow=False, map_to_epic=False, interpolate_coords=1, batch_strategy="mixed"):
+                 only_flow=False, map_to_epic=False, interpolate_coords=1, use_dataset=None):
         self.sampler = sampler
         # 1-1 association between dataset name, split file and resp tasks
         assert len(dataset_names) == len(tasks_per_dataset)
@@ -177,6 +177,7 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
         self.dataset_infos = dict()
         self.maximum_target_size = 0
         self.interpolate_coords = interpolate_coords
+        self.dataset_to_use = use_dataset
         map_gtea = False
         adl_hand_prefix = ""
         for i, (dataset_name, split_file, td) in enumerate(zip(dataset_names, split_files, tasks_per_dataset)):
@@ -184,6 +185,8 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
             hlp = hand_list_prefix.pop(0) if 'H' in td else None
             olp = object_list_prefix.pop(0) if 'O' in td or 'C' in td else None
             ocp = object_categories.pop(0) if 'C' in td else None
+            if self.dataset_to_use is not None and i != self.dataset_to_use:
+                continue
             if dataset_name == 'epick':
                 data_line = EPICDataLine
                 img_tmpl = 'frame_{:010d}.jpg'
@@ -243,7 +246,6 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
         self.eval_gaze = eval_gaze
         self.vis_data = vis_data
         self.only_flow = only_flow
-        self.batch_strategy = batch_strategy
         if self.only_flow:
             self.use_flow = False
 
@@ -491,7 +493,7 @@ class MultitaskDatasetLoader(torch.utils.data.Dataset):
 
         return to_return
 
-def create_dataset_loader(sampler, lists, transforms_rgb, transforms_flow, validation, tasks_per_dataset, args):
+def create_dataset_loader(sampler, lists, transforms_rgb, transforms_flow, validation, tasks_per_dataset, args, i):
     loader = MultitaskDatasetLoader(sampler, lists, args.dataset, tasks_per_dataset,
                                     batch_transform=transforms_rgb, gaze_list_prefix=args.gaze_list_prefix[:],
                                     hand_list_prefix=args.hand_list_prefix[:],
@@ -502,7 +504,7 @@ def create_dataset_loader(sampler, lists, transforms_rgb, transforms_flow, valid
                                     only_flow=args.only_flow,
                                     map_to_epic=args.map_tasks,
                                     interpolate_coords=args.interpolate_coordinates,
-                                    batch_strategy=args.batches)
+                                    use_dataset=i)
     return loader
 
 # sample_time, indices_time, rgb_time, hand_track_time, gaze_track_time, bpv_time, ocpv_time = 0,0,0,0,0,0,0

@@ -23,7 +23,7 @@ from src.models.mfnet_3d_mo_weighted import MFNET_3D_MO_WEIGHTED
 from src.models.mfnet_3d_mo_t_attn import MFNET_3D_MO_T_ATTN
 from src.utils.argparse_utils import parse_args, parse_tasks_str, parse_tasks_per_dataset
 from src.utils.file_utils import print_and_save, save_mt_checkpoints, init_folders, resume_checkpoint, load_pretrained_weights
-from src.utils.dataset.dataset_loader import MultitaskDatasetLoaderVideoLevel, create_dataset_loader
+from src.utils.dataset.dataset_loader import MultitaskDatasetLoaderVideoLevel, create_dataset_loader, MultitaskDatasetLoader
 from src.utils.video_sampler import prepare_sampler
 from src.utils.dataset.dataset_loader_transforms import RandomScale, RandomCrop, RandomHorizontalFlip, RandomHLS_2, ToTensorVid,\
     Normalize, Resize, CenterCrop, PredefinedHorizontalFlip
@@ -124,10 +124,19 @@ def main():
         RandomScale(make_square=True, aspect_ratio=[0.8, 1. / 0.8], slen=[224, 288]), RandomCrop((224, 224)),
         RandomHorizontalFlip() if args.only_flow else PredefinedHorizontalFlip(), ToTensorVid(dim=2),
         Normalize(mean=mean_1d, std=std_1d)])
-    train_loader = create_dataset_loader(train_sampler, args.train_lists, train_transforms, train_transforms_flow,
-                                         False, tasks_per_dataset, args)
-    train_iterator = torch.utils.data.DataLoader(train_loader, batch_size=args.batch_size, shuffle=True,
+    if args.batch_strategy in ['interleaved', 'full']:
+        train_iterator = []
+        for i in range(len(args.dataset)):
+            train_loader = create_dataset_loader(train_sampler, args.train_lists, train_transforms, train_transforms_flow,
+                                                 False, tasks_per_dataset, args, i)
+            iterator = torch.utils.data.DataLoader(train_loader, batch_size=args.batch_size, shuffle=True,
                                                  num_workers=args.num_workers, pin_memory=True)
+            train_iterator.append(iterator)
+    else:
+        train_loader = create_dataset_loader(train_sampler, args.train_lists, train_transforms, train_transforms_flow,
+                                             False, tasks_per_dataset, args, None)
+        train_iterator = torch.utils.data.DataLoader(train_loader, batch_size=args.batch_size, shuffle=True,
+                                                    num_workers=args.num_workers, pin_memory=True)
 
     test_sampler = prepare_sampler(args.eval_sampler, args.clip_length, args.frame_interval, speed=[1.0, 1.0],
                                    window=args.eval_window)
@@ -136,7 +145,7 @@ def main():
     test_transforms_flow = transforms.Compose([Resize((256, 256), False), CenterCrop((224, 224)), ToTensorVid(dim=2),
                                               Normalize(mean=mean_1d, std=std_1d)])
     test_loader = create_dataset_loader(test_sampler, args.test_lists, test_transforms, test_transforms_flow, False,
-                                        tasks_per_dataset, args)
+                                        tasks_per_dataset, args, None)
     test_iterator = torch.utils.data.DataLoader(test_loader, batch_size=args.batch_size, shuffle=False,
                                                 num_workers=args.num_workers, pin_memory=True)
 
@@ -148,7 +157,13 @@ def main():
         map_iterator = torch.utils.data.DataLoader(map_loader, batch_size=args.eval_map_vid_splits, shuffle=False,
                                                    num_workers=args.num_workers, pin_memory=True)
 
-    lr_scheduler = load_lr_scheduler(args.lr_type, args.lr_steps, optimizer, len(train_iterator))
+    len_train_iterator = 0
+    if type(train_iterator) == list:
+        for iterator in train_iterator:
+            len_train_iterator += len(iterator)
+    else:
+        len_train_iterator = len(train_iterator)
+    lr_scheduler = load_lr_scheduler(args.lr_type, args.lr_steps, optimizer, len_train_iterator)
 
     kwargs = {'lr_scheduler': lr_scheduler}
     if args.map_tasks:
@@ -165,6 +180,7 @@ def main():
         kwargs['grad_acc_batches'] = args.grad_acc_batches
         kwargs['multioutput_loss'] = multioutput_loss
         kwargs['t_attn'] = args.t_attn
+        kwargs['batch_strategy'] = args.batch_strategy
     num_cls_tasks = objectives[0]
     top1 = [0.0] * num_cls_tasks
     if args.eval_map_vl:

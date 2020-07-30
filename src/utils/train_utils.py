@@ -13,6 +13,7 @@ Functions that are used in training the network.
 import time
 import torch
 import copy
+import random
 
 from src.utils.calc_utils import AverageMeter, accuracy, init_training_metrics, init_test_metrics,\
     update_per_dataset_metrics, charades_map
@@ -610,6 +611,7 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
     grad_acc_batches = kwargs.get('grad_acc_batches')
     multioutput_loss = kwargs.get('multioutput_loss')
     t_attn = kwargs.get('t_attn')
+    batch_strategy = kwargs.get('batch_strategy')
     batch_time, full_losses_metric, dataset_metrics = init_training_metrics(tasks_per_dataset, multioutput_loss, t_attn)
 
     optimizer.zero_grad()
@@ -626,7 +628,39 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
         num_aggregated_batches = 0
         real_batch_idx = 0
 
-    for batch_idx, data in enumerate(train_iterator):
+    len_train_iterator = 0
+    if type(train_iterator) == list:
+        for iterator in train_iterator:
+            len_train_iterator += len(iterator)
+    else:
+        len_train_iterator = len(train_iterator)
+
+    if batch_strategy in ['interleaved', 'full']:
+        enum_iters = [enumerate(iterator) for iterator in train_iterator]
+    else:
+        enum_iters = enumerate(train_iterator)
+
+    batch_idx = 0
+    batches_for_iter = [0, 0]
+    while batch_idx < len_train_iterator:
+        if batch_strategy == 'interleaved':
+            if batches_for_iter[0] < len(train_iterator[0]) and batches_for_iter[1] >= len(train_iterator[1]): # only support 2 datasets for now
+                iterator_id = 0
+            elif batches_for_iter[0] >= len(train_iterator[0]) and batches_for_iter[1] < len(train_iterator[1]):
+                iterator_id = 1
+            else:
+                iterator_id = random.randint(0, len(train_iterator) - 1)
+            batches_for_iter[iterator_id] += 1
+            iterator = enum_iters[iterator_id]
+            _, data = next(iterator)
+        elif batch_strategy == "full":
+            iterator_id = 0 if batch_idx < len(train_iterator[0]) else 1
+            iterator = enum_iters[iterator_id]
+            _, data = next(iterator)
+        else:
+            _, data = next(enum_iters)
+            # here it should be _ == batch_idx
+    # for batch_idx, data in enumerate(train_iterator):
         if isinstance(lr_scheduler, CyclicLR):
             lr_scheduler.step()
 
@@ -656,7 +690,7 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
                 # print results
                 real_batch_idx += 1
                 to_print = '[Epoch:{}, Batch {}/{} in {:.3f} s, LR {:.6f}]'.format(
-                    cur_epoch, real_batch_idx, len(train_iterator)//num_aggregated_batches, batch_time.val,
+                    cur_epoch, real_batch_idx, len_train_iterator//num_aggregated_batches, batch_time.val,
                     lr_scheduler.get_lr()[0])
                 make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_training, full_losses_metric,
                               dataset_ids, grad_acc_loss, multioutput_loss, t_attn)
@@ -668,10 +702,10 @@ def train_mfnet_mo(model, optimizer, train_iterator, tasks_per_dataset, cur_epoc
             t0 = time.time()
             # print results
             to_print = '[Epoch:{}, Batch {}/{} in {:.3f} s, LR {:.6f}]'.format(
-                cur_epoch, batch_idx, len(train_iterator), batch_time.val, lr_scheduler.get_lr()[0])
+                cur_epoch, batch_idx, len_train_iterator, batch_time.val, lr_scheduler.get_lr()[0])
             make_to_print(to_print, log_file, tasks_per_dataset, dataset_metrics, is_training, full_losses_metric,
                           dataset_ids, full_loss, multioutput_loss, t_attn)
-
+        batch_idx += 1
     print_and_save("Epoch train time: {}".format(batch_time.sum), log_file)
 
 def test_mfnet_mo_comb(model, test_iterator, tasks_per_dataset, cur_epoch, dataset_type, log_file, gpus, **kwargs):
