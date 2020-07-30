@@ -25,6 +25,7 @@ def parse_args():
     parser.add_argument("--act", default=False, action='store_true')
     parser.add_argument("--action_file", type=str,
                         default=r"D:\Datasets\egocentric\EPIC_KITCHENS\EPIC_action_classes_new.csv")
+    parser.add_argument("--add_rgb_frames_path", default=False, action='store_true')
 
     return parser.parse_args()
 
@@ -82,7 +83,10 @@ for index, row in annotations.iterrows():
     if args.nd and uid in bad_uids:
         continue
     videoid = row.video_id
-    segment_dir = os.path.join(args.data_dir_path, pid, videoid)
+    if args.add_rgb_frames_path:
+        segment_dir = os.path.join(args.data_dir_path, pid, "rgb_frames", videoid)
+    else:
+        segment_dir = os.path.join(args.data_dir_path, pid, videoid)
     if args.act:
         action_id = all_action_ids[all_action_ids.class_key == '{}_{}'.format(verb_class, noun_class)].action_id.item()
         line = "{} {} {} {} {} {} {}\n".format(segment_dir, num_frames, verb_class, noun_class, uid, start_frame, action_id)
