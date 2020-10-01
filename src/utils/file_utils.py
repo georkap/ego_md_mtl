@@ -284,11 +284,12 @@ def parse_log_file_name(name_parts):
 
 def load_pretrained_weights(model_ft, args):
     checkpoint = torch.load(args.pretrained_model_path, map_location={'cuda:0': 'cpu'})
-    # checkpoint = torch.load(args.pretrained_model_path)
+    # checkpoint = torch.load(args.pretrained_model_path)  # maybe needed for resnet
     # below line is needed if network is trained with DataParallel to remove 'module' prefix
     base_dict = {'.'.join(k.split('.')[1:]): v for k, v in list(checkpoint['state_dict'].items())}
+
     # remove classifiers from base dict
-    base_dict = {k: v for k, v in list(base_dict.items()) if 'classifier' not in k}
+    base_dict = {k: v for k, v in list(base_dict.items()) if 'fc' not in k}  # change classifier into fc for resnet
     if args.long: # clone some weight maps to the longer network version
         conv4_keys = [k for k in list(base_dict.keys()) if k.startswith('conv4')]
         for i, key in enumerate(conv4_keys):

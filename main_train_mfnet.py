@@ -12,15 +12,7 @@ from torch.utils.data import DataLoader
 import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 
-from src.models.mfnet_3d_mo import MFNET_3D_MO
-from src.models.mfnet_3d_mo_comb import MFNET_3D_MO_COMB
-from src.models.mfnet_3d_slowfast import MFNET_3D_SF
-from src.models.mfnet_3d_mo_mm import MFNET_3D_MO_MM
-from src.models.mfnet_3d_mo_dfb import MFNET_3D_DFB
-from src.models.mfnet_3d_mo_lstm import MFNET_3D_LSTM
-from src.models.mfnet_3d_mo_tdn import MFNET_3D_TDN
-from src.models.mfnet_3d_mo_weighted import MFNET_3D_MO_WEIGHTED
-from src.models.mfnet_3d_mo_t_attn import MFNET_3D_MO_T_ATTN
+from src.models import resnet_3d
 from src.utils.argparse_utils import parse_args, parse_tasks_str, parse_tasks_per_dataset
 from src.utils.file_utils import print_and_save, save_mt_checkpoints, init_folders, resume_checkpoint, load_pretrained_weights
 from src.utils.dataset.dataset_loader import MultitaskDatasetLoaderVideoLevel, create_dataset_loader
@@ -47,50 +39,24 @@ def main():
     multioutput_loss = 0
 
     kwargs = dict()
-    if args.sf:
-        mfnet_3d = MFNET_3D_SF
-    elif args.flow:
-        mfnet_3d = MFNET_3D_MO_MM
-        kwargs['modalities'] = {'RGB': 3, 'Flow': 2}
-    elif args.dfb:
-        mfnet_3d = MFNET_3D_DFB
-        multioutput_loss = 4
-    elif args.lstm:
-        mfnet_3d = MFNET_3D_LSTM
-        kwargs['attn'] = args.attn
-        kwargs['mtl'] = args.mtl
-        if args.mtl:
-            multioutput_loss = 3
-    elif args.attn:
-        mfnet_3d = MFNET_3D_MO_WEIGHTED
-    elif args.t_attn:
-        mfnet_3d = MFNET_3D_MO_T_ATTN
-    elif args.tdn:
-        mfnet_3d = MFNET_3D_TDN
-        multioutput_loss = 3
-    elif args.map_tasks:
-        mfnet_3d = MFNET_3D_MO_COMB
-        if 'charego1' in args.dataset and 'charego3' in args.dataset:
-            kwargs['map_charades'] = True
-    else:
-        mfnet_3d = MFNET_3D_MO
-        if args.only_flow:
-            kwargs['input_channels'] = 2
-
-    # kwargs['norm'] = args.norm
 
     kwargs["num_coords"] = num_coords
     kwargs["num_objects"] = num_objects
     kwargs["num_obj_cat"] = num_obj_cat
     kwargs["one_object_layer"] = args.one_object_layer
     kwargs["interpolate_coordinates"] = args.interpolate_coordinates
+    kwargs["sample_size"] = 224
+    kwargs["sample_duration"] = 16
+    kwargs["dropout"] = args.dropout
     if args.long:
         kwargs["k_sec"] = {2: 3, 3: 4, 4: 11, 5: 3}
-    model_ft = mfnet_3d(num_classes, dropout=args.dropout, **kwargs)
+    model_ft = resnet_3d.resnet18(num_classes=num_classes, shortcut_type='B', **kwargs)
     if args.pretrained:
         model_ft = load_pretrained_weights(model_ft, args)
     model_ft.cuda(device=args.gpus[0])
     model_ft = torch.nn.DataParallel(model_ft, device_ids=args.gpus, output_device=args.gpus[0])
+    # parameters = resnet_3d.get_fine_tuning_parameters(model_ft, 0)
+
     print_and_save("Model loaded on gpu {} devices".format(args.gpus), log_file)
 
     # config optimizer
