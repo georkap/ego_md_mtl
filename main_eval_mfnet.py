@@ -141,7 +141,7 @@ def main():
         val_transforms_flow = transforms.Compose([
             Resize((256, 256), False), CenterCrop((224, 224)), ToTensorVid(dim=2), Normalize(mean=mean_1d, std=std_1d)])
         val_loader = create_dataset_loader(val_sampler, args.val_lists, val_transforms, val_transforms_flow, True,
-                                           tasks_per_dataset, args)
+                                           tasks_per_dataset, args, None)
         val_iter = torch.utils.data.DataLoader(val_loader, batch_size=args.batch_size, shuffle=False,
                                                num_workers=args.num_workers, pin_memory=True)
 
