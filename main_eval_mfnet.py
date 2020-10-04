@@ -28,15 +28,7 @@ import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
-from src.models.mfnet_3d_mo import MFNET_3D_MO
-from src.models.mfnet_3d_mo_comb import MFNET_3D_MO_COMB
-from src.models.mfnet_3d_slowfast import MFNET_3D_SF
-from src.models.mfnet_3d_mo_mm import MFNET_3D_MO_MM
-from src.models.mfnet_3d_mo_dfb import MFNET_3D_DFB
-from src.models.mfnet_3d_mo_lstm import MFNET_3D_LSTM
-from src.models.mfnet_3d_mo_tdn import MFNET_3D_TDN
-from src.models.mfnet_3d_mo_weighted import MFNET_3D_MO_WEIGHTED
-from src.models.mfnet_3d_mo_t_attn import MFNET_3D_MO_T_ATTN
+from src.models import resnet_3d
 from src.utils.argparse_utils import parse_args, make_log_file_name, parse_tasks_str, parse_tasks_per_dataset, compare_tasks_per_dataset
 from src.utils.file_utils import print_and_save
 from src.utils.dataset.dataset_loader import MultitaskDatasetLoaderVideoLevel, create_dataset_loader
@@ -50,7 +42,7 @@ np.set_printoptions(linewidth=np.inf, threshold=np.inf)
 torch.set_printoptions(linewidth=1000000, threshold=1000000)
 
 def main():
-    args = parse_args('mfnet', val=True)
+    args = parse_args('resnet', val=True)
     tasks_per_dataset = parse_tasks_str(args.tasks, args.dataset, args.interpolate_coordinates)
     gtea_map = (args.eval_dataset == 'egtea' and args.map_tasks)
     epic_map = (args.eval_dataset == 'epick' and args.map_tasks)
@@ -77,42 +69,20 @@ def main():
     multioutput_loss = 0
 
     kwargs = dict()
-    if args.sf:
-        mfnet_3d = MFNET_3D_SF
-    elif args.flow:
-        mfnet_3d = MFNET_3D_MO_MM
-        kwargs['modalities'] = {'RGB':3, 'Flow':2}
-    elif args.dfb:
-        mfnet_3d = MFNET_3D_DFB
-        multioutput_loss = 4
-    elif args.lstm:
-        mfnet_3d = MFNET_3D_LSTM
-        kwargs['attn'] = args.attn
-        kwargs['mtl'] = args.mtl
-        if args.mtl:
-            multioutput_loss = 3
-    elif args.attn: # weighted attention model
-        mfnet_3d = MFNET_3D_MO_WEIGHTED
-    elif args.t_attn: # temporal attention model
-        mfnet_3d = MFNET_3D_MO_T_ATTN
-    elif args.tdn:
-        mfnet_3d = MFNET_3D_TDN
-        multioutput_loss = 3
-    elif args.map_tasks:
-        mfnet_3d = MFNET_3D_MO_COMB
-    else:
-        mfnet_3d = MFNET_3D_MO
-
-    kwargs["ensemble_eval"] = args.eval_ensemble
-
-    kwargs["num_coords"] = num_coords + (2 if args.map_tasks else 0)
+    kwargs["num_coords"] = num_coords
     kwargs["num_objects"] = num_objects
     kwargs["num_obj_cat"] = num_obj_cat
     kwargs["one_object_layer"] = args.one_object_layer
     kwargs["interpolate_coordinates"] = args.interpolate_coordinates
+    kwargs["sample_size"] = 224
+    kwargs["sample_duration"] = 16
+    kwargs["dropout"] = args.dropout
     if args.long:
         kwargs["k_sec"] = {2: 3, 3: 4, 4: 11, 5: 3}
-    model_ft = mfnet_3d(num_classes, **kwargs)
+    if args.resnet == 18:
+        model_ft = resnet_3d.resnet18(num_classes=num_classes, shortcut_type='B', **kwargs)
+    else:
+        model_ft = resnet_3d.resnet50(num_classes=num_classes, shortcut_type='B', **kwargs)
     model_ft = torch.nn.DataParallel(model_ft).cuda()
     checkpoint = torch.load(args.ckpt_path, map_location={'cuda:1': 'cuda:0'})
     if args.eval_tasks is not None:
