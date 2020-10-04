@@ -13,14 +13,14 @@ __all__ = [
 ]
 
 
-def conv3x3x3(in_planes, out_planes, stride=1):
+def conv3x3x3(in_planes, out_planes, stride=1, kernel_size=3, padding=1):
     # 3x3x3 convolution with padding
     return nn.Conv3d(
         in_planes,
         out_planes,
-        kernel_size=3,
+        kernel_size=kernel_size,
         stride=(1, stride, stride), # stride=stride,
-        padding=1,
+        padding=padding,
         bias=False)
 
 
@@ -74,12 +74,15 @@ class Bottleneck(nn.Module):
 
     def __init__(self, inplanes, planes, stride=1, downsample=None):
         super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv3d(inplanes, planes, kernel_size=1, bias=False)
+        # self.conv1 = nn.Conv3d(inplanes, planes, kernel_size=1, bias=False)
+        self.conv1 = conv3x3x3(inplanes, planes, kernel_size=1, padding=0)
         self.bn1 = nn.BatchNorm3d(planes)
-        self.conv2 = nn.Conv3d(
-            planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        # self.conv2 = nn.Conv3d(
+        #     planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv2 = conv3x3x3(planes, planes, kernel_size=3, stride=stride, padding=1)
         self.bn2 = nn.BatchNorm3d(planes)
-        self.conv3 = nn.Conv3d(planes, planes * 4, kernel_size=1, bias=False)
+        # self.conv3 = nn.Conv3d(planes, planes * 4, kernel_size=1, bias=False)
+        self.conv3 = conv3x3x3(planes, planes * 4, kernel_size=1, padding=0)
         self.bn3 = nn.BatchNorm3d(planes * 4)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample

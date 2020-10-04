@@ -26,7 +26,7 @@ from src.constants import *
 
 
 def main():
-    args, model_name = parse_args('mfnet', val=False)
+    args, model_name = parse_args('resnet', val=False)
     tasks_per_dataset = parse_tasks_str(args.tasks, args.dataset, args.interpolate_coordinates)
     objectives_text, objectives, task_sizes = parse_tasks_per_dataset(tasks_per_dataset)
     num_classes, num_coords, num_objects, num_obj_cat = task_sizes
@@ -50,7 +50,10 @@ def main():
     kwargs["dropout"] = args.dropout
     if args.long:
         kwargs["k_sec"] = {2: 3, 3: 4, 4: 11, 5: 3}
-    model_ft = resnet_3d.resnet18(num_classes=num_classes, shortcut_type='B', **kwargs)
+    if args.resnet == 18:
+        model_ft = resnet_3d.resnet18(num_classes=num_classes, shortcut_type='B', **kwargs)
+    else:
+        model_ft = resnet_3d.resnet50(num_classes=num_classes, shortcut_type='B', **kwargs)
     if args.pretrained:
         model_ft = load_pretrained_weights(model_ft, args)
     model_ft.cuda(device=args.gpus[0])

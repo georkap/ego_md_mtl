@@ -36,7 +36,7 @@ def parse_args_dataset(parser, net_type):
     parser.add_argument('--object_cats', type=str, default='', nargs='*')
     parser.add_argument('--interpolate_coordinates', type=int, default=1)
     parser.add_argument('--batch_size', type=int, default=1)
-    if net_type in ['mfnet']:
+    if net_type in ['resnet']:
         parser.add_argument('--clip_gradient', action='store_true')
         parser.add_argument('--clip_length', type=int, default=16, help="define the length of each input sample.")
         parser.add_argument('--frame_interval', type=int, default=2, help="define the sampling interval between frames.")
@@ -46,7 +46,7 @@ def parse_args_dataset(parser, net_type):
 
 def parse_args_network(parser, net_type):
     # Network configuration
-    if net_type in ['mfnet']:
+    if net_type in ['resnet']:
         parser.add_argument('--long', default=False, action='store_true')
         parser.add_argument('--sf', default=False, action='store_true')
         parser.add_argument('--flow', default=False, action='store_true')
@@ -69,6 +69,7 @@ def parse_args_network(parser, net_type):
                             help="e.g. A106V19N53GH for all EGTEA tasks with all their classes. "
                                  "If '+' is in the string it will assume multitask for multiple datasets, the order of"
                                  "which will be determined by the value of args.dataset")
+        parser.add_argument("--resnet", type=int, default='18', choices=[18, 50])
         # parser.add_argument('--use_gaze', default=False, action='store_true')  # only applies to gtea
         # parser.add_argument('--use_hands', default=False, action='store_true')  # applies to epick or gtea
     return parser
@@ -161,7 +162,7 @@ def make_model_name(args, net_type):
     model_name = ''
     for dat_name in args.dataset:
         model_name += '{}_'.format(dat_name)
-    if net_type == 'mfnet':
+    if net_type == 'resnet':
         model_name += "{}_{}_{}_{}_cl{}".format(net_type, args.batch_size,
                                                 str(args.dropout).split('.')[0]+str(args.dropout).split('.')[1],
                                                 args.max_epochs, args.clip_length)
